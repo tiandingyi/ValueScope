@@ -2,42 +2,54 @@
 
 ## Product Direction
 
-ValueScope is a local-first value investing screener and research workstation. The first version focuses on A shares, but the product identity is global: A shares are the initial market, not the permanent boundary.
+ValueScope is a local-first value investing research workstation and screener. The first version focuses on reproducing the A-share financial report workflow from `stock-scripts`, but the product identity is global: A shares are the initial market, not the permanent boundary.
 
 ## Principles
 
 - Local-first by default: normal use should not require a database, Docker, or network.
-- Explain every result: every stock should show why it passed or failed a screen.
-- Reuse proven financial logic: stock-scripts is the first reference for A-share metrics and valuation language.
+- Explain every result: every report section and later screen result should show the metric basis, units, warnings, and missing-data states.
+- Reproduce proven financial logic: stock-scripts is the first reference for A-share report structure, metrics, and valuation language, but ValueScope owns its implementation.
 - Ship workflow increments: each sprint should produce a runnable investor workflow, not only infrastructure.
 - Keep AI as a research amplifier: do not make opaque buy/sell recommendations.
 
 ## Phases
 
-### Phase 1: A-Share Screener MVP
+### Phase 1: A-Share Financial Report MVP
 
-Goal: Load a local snapshot, compose basic factor filters, show sortable results, and explain pass/fail reasons.
+Goal: Generate a local single-stock financial report snapshot and render the stock-scripts-style report in React.
+
+Deliverables:
+
+- `company_report_snapshot.json` v0 schema.
+- ValueScope-owned Python report snapshot generator.
+- Sample A-share company report snapshot.
+- Local report snapshot loader.
+- React report page with valuation, quality, cash flow, capital safety, shareholder return, and metric explanation sections.
+
+### Phase 2: A-Share Data Loop Hardening
+
+Goal: Make report snapshot generation and refresh reliable enough for daily single-stock research.
+
+Deliverables:
+
+- Broader report metric coverage until stock-scripts report capability is fully reproduced.
+- Refresh metadata and freshness display.
+- Source warnings and missing-data diagnostics.
+- Reproducible local cache inputs.
+
+### Phase 3: A-Share Screener MVP
+
+Goal: Use the report-grade metric pipeline to generate a stock universe snapshot, compose factor filters, show sortable results, and explain pass/fail reasons.
 
 Deliverables:
 
 - `screen_snapshot.json` v0 schema.
-- Sample A-share snapshot.
-- Local snapshot loader.
+- Small A-share universe snapshot.
 - Dynamic filter UI.
 - Result table with explanations.
-
-### Phase 2: Better A-Share Data Loop
-
-Goal: Make snapshot generation and refresh reliable enough for daily use.
-
-Deliverables:
-
-- Snapshot exporter that adapts stock-scripts metrics.
-- Refresh metadata and freshness display.
-- Watchlist universe support.
 - Missing-data diagnostics.
 
-### Phase 3: Strategy Recipes
+### Phase 4: Strategy Recipes
 
 Goal: Turn repeated filters into named investing methods.
 
@@ -48,18 +60,17 @@ Deliverables:
 - Recipe comparison.
 - Guardrails against overfitting and false certainty.
 
-### Phase 4: Single-Stock Research Workflow
+### Phase 5: AI Research Packet Workflow
 
-Goal: Connect screening results to deeper company analysis.
+Goal: Connect report and screening results to deeper company analysis.
 
 Deliverables:
 
-- Single-stock decision card.
 - AI research packet export.
 - Financial evidence summary.
 - Risk and uncertainty checklist.
 
-### Phase 5: Global Market Expansion
+### Phase 6: Global Market Expansion
 
 Goal: Extend the same local-first model beyond A shares.
 

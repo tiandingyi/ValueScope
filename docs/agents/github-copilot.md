@@ -12,3 +12,6 @@ ValueScope is a local-first financial screener. MVP data comes from local JSON s
 - Filter results need pass, fail, and missing explanations.
 - Snapshot schema changes must be reflected in `docs/snapshot-schema.md`.
 - No database should be required for normal MVP use.
+- Meaningful changes should update `docs/progress.md`.
+- Changes that affect the next session should update `docs/agent-handoff.md`.
+- Non-trivial sessions should append to `docs/working-log.md`.

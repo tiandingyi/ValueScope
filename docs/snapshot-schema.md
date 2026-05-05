@@ -10,7 +10,7 @@
 
 ## Purpose
 
-The snapshot is the local data contract between data generation and the ValueScope UI. It should be readable without a database or network.
+The screen snapshot is the later local data contract for universe screening. It is not the first Sprint 001 contract; the first workflow uses `company_report_snapshot.json`, documented in `docs/report-snapshot-schema.md`.
 
 ## Top-Level Shape
 
