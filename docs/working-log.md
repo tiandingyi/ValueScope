@@ -258,6 +258,75 @@ Next:
 - Run live `000858` generation through the local FastAPI/Python path.
 - Inspect generated JSON and expand section mapping/labels so ValueScope reproduces the old report's actual content, not just its shell.
 
+## 2026-05-06 17:20
+
+Task:
+
+- Audited Sprint 002 user stories for completeness and tightened story definitions after identifying parity-scope gaps.
+
+Files Changed:
+
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Commands:
+
+- Compared sprint doc, capability map, and committed sample snapshot.
+- Reviewed implementation evidence in `src/App.tsx`, `src/reportSnapshot.ts`, and `python/valuescope/report_snapshot.py`.
+
+Decisions:
+
+- Keep Sprint 002 as the active scope but add a post-review addendum instead of creating a new sprint doc.
+- Add stricter, machine-checkable AC for US-006 through US-012.
+- Add missing parity stories US-013 through US-017 to prevent scope blind spots.
+
+Problems:
+
+- Existing sprint status said "Done" while several AC checks were not strict enough for deterministic acceptance.
+
+Next:
+
+- Implement tightened AC behavior deltas (sticky threshold, chart insufficient-data rule, OE yield color thresholds).
+- Implement US-013 and US-014 before declaring strict Sprint 002 closure.
+
+## 2026-05-06 17:35
+
+Task:
+
+- Executed the parity-closure implementation pass after the Sprint 002 story audit.
+
+Files Changed:
+
+- `src/App.tsx`
+- `src/styles.css`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Commands:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 600285 --years 20`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run build`
+- `npm test -- --run`
+- `npm run test:e2e`
+
+Decisions:
+
+- Implemented `巴芒总览` as a UI-level summary block driven by existing section item statuses to close visual/structure parity quickly.
+- Added valuation machine-readable table directly in the valuation section to improve auditability without changing snapshot schema first.
+
+Problems:
+
+- Initial build failed once due to missing `snapshot` prop wiring in `ReportSectionCard`; fixed by passing snapshot from `ReportView`.
+
+Next:
+
+- Perform strict side-by-side comparison on 600285 and capture remaining mismatch list.
+- Decide whether to promote `巴芒总览` from heuristic UI derivation into a snapshot-native contract.
+
 ## 2026-05-06 10:25
 
 Task:
@@ -434,3 +503,55 @@ Problems:
 Next:
 
 - Start Sprint 002 planning around provider-level annual provenance and a dedicated share-capital diagnostics table.
+
+## 2026-05-06 16:40
+
+Task:
+
+- Completed Sprint 002 using GOAL-style closeout: snapshot v0.2, UI parity features, sample regeneration, tests, screenshots, and docs.
+
+Files Changed:
+
+- `python/valuescope/report_snapshot.py`
+- `src/reportSnapshot.ts`
+- `src/App.tsx`
+- `src/styles.css`
+- `src/App.test.tsx`
+- `src/reportSnapshot.test.ts`
+- `tests/e2e/report-workspace.spec.ts`
+- `tests/python/test_report_snapshot.py`
+- `public/samples/company_report_snapshot.json`
+- `README.md`
+- `docs/report-snapshot-schema.md`
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Commands:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm test -- --run`
+- `npm run build`
+- `npm run test:e2e`
+- Playwright screenshot capture to:
+  - `test-results/current-valuescope-sprint2-desktop.png`
+  - `test-results/current-valuescope-sprint2-mobile.png`
+
+Decisions:
+
+- Snapshot schema is now v0.2.
+- `market_context` is top-level and also rendered as a section; missing context uses an explicit placeholder.
+- Bond-yield chart data is compressed to monthly points plus latest point so committed sample data stays inspectable.
+- The UI uses local SVG line charts instead of adding Recharts/Chart.js because existing dependencies are enough for the required line charts.
+- Valuation badge and explanation copy comes from snapshot item fields, with OE-DCF sensitivity preserved from the legacy metric implication.
+
+Problems:
+
+- Provider-level annual `REPORT_TYPE=年报` still is not exposed at the facade boundary; the conservative cutoff remains.
+- Live generation still depends on external/cache-backed data providers and may be slow enough to deserve a background job/status UX.
+
+Next:
+
+- Plan Sprint 003 around provider-level annual provenance, share-capital diagnostics, or generation job UX.

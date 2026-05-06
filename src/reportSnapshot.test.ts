@@ -7,8 +7,13 @@ describe("report snapshot schema", () => {
     const parsed = parseReportSnapshot(sample);
     expect(parsed.company.ticker).toBe("000858");
     expect(parsed.sections.map((section) => section.id)).toEqual(
-      expect.arrayContaining(["valuation", "cash_flow", "capital_safety", "shareholder_returns"]),
+      expect.arrayContaining(["market_context", "valuation", "pe_percentile", "eps_percentile", "cash_flow", "capital_safety", "shareholder_returns"]),
     );
+    expect(parsed.schema_version).toBe("0.2.0");
+    expect(parsed.current_price).toEqual(expect.any(Number));
+    expect(parsed.market_context).toBeTruthy();
+    expect(parsed.pe_percentile).toBeTruthy();
+    expect(parsed.eps_percentile).toBeTruthy();
   });
 
   it("uses confirmed annual history and excludes unverified latest rows", () => {
@@ -37,5 +42,6 @@ describe("report snapshot schema", () => {
     const notApplicable = valuation?.items.find((item) => item.status === "not_applicable");
     expect(notApplicable?.value).toMatch(/不适用/);
     expect(notApplicable?.basis ?? notApplicable?.meaning).toBeTruthy();
+    expect(valuation?.items.some((item) => item.badge || item.what_it_measures || item.implication)).toBe(true);
   });
 });

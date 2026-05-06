@@ -29,6 +29,11 @@ const SECTION_COPY: Record<string, { title: string; eyebrow: string; summary?: s
     eyebrow: "核心结论",
     summary: "先读经营质量结论，再看估值锚点和年度数据。以下内容是研究辅助，不构成买卖建议。",
   },
+  market_context: {
+    title: "市场环境：利率与股债性价比",
+    eyebrow: "宏观估值锚",
+    summary: "用十年期国债、沪深300估值和风险溢价解释当前估值环境；缺失时不推断。",
+  },
   quality: {
     title: "经营质量",
     eyebrow: "盈利能力",
@@ -65,9 +70,19 @@ const SECTION_COPY: Record<string, { title: string; eyebrow: string; summary?: s
     summary: "年度行保留缺失值，不把缺失数据当作 0。",
   },
   valuation_history: {
-    title: "历史估值锚点",
+    title: "芒格远景逐年假设",
     eyebrow: "逐年估值",
     summary: "逐年查看所有者收益、成长率、分红率和估值模型输出。",
+  },
+  pe_percentile: {
+    title: "PE 近十年历史分位",
+    eyebrow: "历史估值水位",
+    summary: "用次年5月后的收盘价和年度 EPS 还原历史 PE，观察当前估值水位。",
+  },
+  eps_percentile: {
+    title: "E（EPS）近十年历史分位",
+    eyebrow: "盈利历史水位",
+    summary: "用年度 EPS 样本比较当前盈利在历史中的位置。",
   },
   diagnostics: {
     title: "诊断信息",
@@ -133,14 +148,28 @@ const TABLE_COLUMNS: Record<string, TableColumn[]> = {
   ],
   valuation_history: [
     { key: "year", label: "年份", kind: "text" },
-    { key: "oe_ps", label: "所有者收益/股", kind: "number" },
+    { key: "munger_mid", label: "芒格25x", kind: "number" },
+    { key: "oe_dcf", label: "OE-DCF", kind: "number" },
     { key: "eps_cagr", label: "EPS复合增速", kind: "percent" },
+    { key: "exit_pes", label: "退出PE", kind: "text" },
     { key: "div_yield", label: "股息率", kind: "percent" },
     { key: "peg", label: "PEG", kind: "multiple" },
     { key: "pegy", label: "PEGY", kind: "multiple" },
-    { key: "oe_dcf", label: "所有者收益DCF", kind: "number" },
-    { key: "munger_mid", label: "芒格25x", kind: "number" },
     { key: "share_basis_used", label: "股本口径", kind: "text" },
+  ],
+  pe_percentile: [
+    { key: "year", label: "年份", kind: "text" },
+    { key: "anchor_date", label: "锚点日期", kind: "text" },
+    { key: "price", label: "当时价格", kind: "number" },
+    { key: "eps", label: "EPS", kind: "number" },
+    { key: "pe", label: "PE", kind: "multiple" },
+  ],
+  eps_percentile: [
+    { key: "year", label: "年份", kind: "text" },
+    { key: "eps", label: "EPS", kind: "number" },
+    { key: "real_eps", label: "真实EPS", kind: "number" },
+    { key: "basic_eps", label: "基本EPS", kind: "number" },
+    { key: "basis", label: "口径", kind: "text" },
   ],
   owner_earnings_yield: [
     { key: "year", label: "年份", kind: "text" },
@@ -290,22 +319,39 @@ function StatusPanel({ title, message, tone }: { title: string; message: string;
 }
 
 function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
+  const [showSticky, setShowSticky] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowSticky(window.scrollY >= 100);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const sections = useMemo(
     () => snapshot.sections.filter((section) => section.items.length > 0 || section.rows?.length || section.details),
     [snapshot],
   );
   const keyItems = useMemo(() => buildKeyItems(sections), [sections]);
   const annualRows = sections.find((section) => section.id === "annual_rows")?.rows ?? [];
+  const valuationRows = sections.find((section) => section.id === "valuation_history")?.rows ?? [];
+  const peRows = sections.find((section) => section.id === "pe_percentile")?.rows ?? [];
+  const epsRows = sections.find((section) => section.id === "eps_percentile")?.rows ?? [];
   const companyName = normalizeCompanyName(snapshot.company.name);
 
   return (
     <>
+      <div className={`report-sticky${showSticky ? " visible" : ""}`} aria-label="当前报告">
+        <strong>{companyName}</strong>
+        <span>{snapshot.company.ticker}</span>
+        <span>{formatPrice(snapshot.current_price)}</span>
+      </div>
       <section className="report-cover" id="overview">
         <div>
           <p className="eyebrow">{formatMarket(snapshot.company.market)} · {formatMode(snapshot.source.mode)}</p>
           <h1>{companyName} 财报分析报告</h1>
           <p className="report-intro">
-            基于本地数据快照渲染。绿色代表接近优秀或低估，黄色代表需要观察，红色代表明显偏离目标画像；缺失值保持“缺失”，不会被当作 0。
+            基于本地数据快照渲染。<span className="text-green">绿色</span>代表接近优秀或低估，<span className="text-amber">黄色</span>代表需要观察，<span className="text-red">红色</span>代表明显偏离目标画像；缺失值保持“缺失”，不会被当作 0。
           </p>
         </div>
         <dl className="cover-metadata">
@@ -322,11 +368,17 @@ function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
             <dd>{snapshot.coverage.years.length} 年</dd>
           </div>
           <div>
+            <dt>当前股价</dt>
+            <dd>{formatPrice(snapshot.current_price)}</dd>
+          </div>
+          <div>
             <dt>生成时间</dt>
             <dd>{formatDate(snapshot.generated_at)}</dd>
           </div>
         </dl>
       </section>
+
+      <BuffettMungerOverview sections={sections} snapshot={snapshot} />
 
       {keyItems.length > 0 && (
         <section className="kpi-strip" aria-label="关键指标">
@@ -348,6 +400,21 @@ function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
       )}
 
       {annualRows.length > 1 && <TrendSection rows={annualRows} />}
+      {(valuationRows.length > 1 || peRows.length > 1 || epsRows.length > 1) && (
+        <section className="chart-section" id="valuation_charts">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">估值走势</p>
+              <h2>PE、EPS 与估值锚点趋势</h2>
+            </div>
+            <span>移动端可横向滚动</span>
+          </div>
+          <div className="mini-chart-grid">
+            <LineChart title="历史 PE 走势" rows={peRows} xKey="year" yKey="pe" unit="x" referenceKeys={["hist_median", "current"]} details={sections.find((section) => section.id === "pe_percentile")?.details} />
+            <LineChart title="历史 EPS 趋势" rows={epsRows} xKey="year" yKey="eps" referenceKeys={["hist_median", "current"]} details={sections.find((section) => section.id === "eps_percentile")?.details} />
+          </div>
+        </section>
+      )}
 
       <div className="report-layout">
         <aside className="side-rail" aria-label="快照信息">
@@ -366,7 +433,7 @@ function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
         </aside>
         <section className="section-stack">
           {sections.map((section) => (
-            <ReportSectionCard key={section.id} section={section} />
+            <ReportSectionCard key={section.id} section={section} snapshot={snapshot} />
           ))}
         </section>
       </div>
@@ -421,10 +488,16 @@ function TrendSection({ rows }: { rows: Array<Record<string, unknown>> }) {
   );
 }
 
-function ReportSectionCard({ section }: { section: ReportSection }) {
+function ReportSectionCard({ section, snapshot }: { section: ReportSection; snapshot: ReportSnapshot }) {
   const visibleRows = section.rows ?? [];
   const copy = sectionCopy(section);
   const columns = tableColumnsFor(section.id, visibleRows);
+  if (section.id === "market_context") {
+    return <MarketContextCard section={section} copy={copy} />;
+  }
+  if (section.id === "pe_percentile" || section.id === "eps_percentile") {
+    return <PercentileCard section={section} copy={copy} columns={columns} />;
+  }
   return (
     <article className="report-section" id={section.id}>
       <div className="section-heading">
@@ -449,8 +522,17 @@ function ReportSectionCard({ section }: { section: ReportSection }) {
           {section.items.slice(0, 10).map((item) => (
             <div className={`metric-row ${item.status}${isLongMetricValue(item.value) ? " long-value" : ""}`} key={`${item.metric}-${item.label}`}>
               <div>
-                <strong>{formatMetricLabel(item.label)}</strong>
+                <div className="metric-title-line">
+                  <strong>{formatMetricLabel(item.label)}</strong>
+                  {item.badge && <span className={`metric-badge ${item.badge_color ?? "muted"}`}>{formatDisplayText(item.badge)}</span>}
+                </div>
                 <p>{formatDisplayText(item.basis ?? item.meaning ?? "未提供口径说明")}</p>
+                {section.id === "valuation" && (
+                  <div className="metric-explain">
+                    {item.what_it_measures && <p><b>衡量什么：</b>{formatDisplayText(item.what_it_measures)}</p>}
+                    {item.implication && <p><b>背后含义：</b>{formatDisplayText(item.implication)}</p>}
+                  </div>
+                )}
               </div>
               <span>{formatMetricValue(item.value, item.status)}</span>
             </div>
@@ -458,30 +540,277 @@ function ReportSectionCard({ section }: { section: ReportSection }) {
         </div>
       )}
       {section.details !== undefined && <DetailsGrid details={section.details} />}
-      {visibleRows.length > 0 && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                {columns.map((column) => (
-                  <th key={column.key}>{column.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {columns.map((column) => (
-                    <td key={column.key}>{formatCell(row[column.key], column)}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {section.id === "valuation" && <ValuationOverviewSummary section={section} snapshot={snapshot} />}
+      {section.id === "valuation" && section.items.length > 0 && <ValuationAuditTable items={section.items} />}
+      {visibleRows.length > 0 && <DataTable rows={visibleRows} columns={columns} sectionId={section.id} />}
+    </article>
+  );
+}
+
+function MarketContextCard({ section, copy }: { section: ReportSection; copy: { title: string; eyebrow: string; summary?: string } }) {
+  const details = asRecord(section.details);
+  const rows = Array.isArray(section.rows) ? section.rows : [];
+  const status = String(details.stock_erp_status ?? "missing");
+  return (
+    <article className="report-section market-section" id={section.id}>
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <h2>{copy.title}</h2>
         </div>
+        {section.warnings.length > 0 && <span>数据缺失</span>}
+      </div>
+      <p className="section-summary">{copy.summary ?? section.summary}</p>
+      {details.status === "missing" ? (
+        <div className="missing-block">数据缺失</div>
+      ) : (
+        <>
+          <div className="market-card-grid">
+            <InfoCard label="中国10Y国债" value={formatPercent(details.bond_latest)} note={String(details.bond_latest_date ?? "")} />
+            <InfoCard label="历史分位" value={formatPercent(details.bond_percentile)} note={formatRange(details.bond_min, details.bond_max, "%")} />
+            <InfoCard label="沪深300 PE" value={formatMultiple(details.csi300_pe_ttm)} note={`盈利率 ${formatPercent(details.csi300_earnings_yield)}`} />
+            <InfoCard label="股债风险溢价" value={formatPercent(details.market_equity_risk_premium)} note={String(details.summary ?? "")} />
+          </div>
+          <div className={`erp-callout ${status}`}>
+            <strong>个股风险溢价：{formatPercent(details.stock_equity_risk_premium)}</strong>
+            <span>{erpStatusText(status)}</span>
+          </div>
+          <LineChart title="国债收益率走势" rows={rows} xKey="date" yKey="yield_pct" unit="%" details={details} referenceKeys={["bond_mean", "bond_latest"]} />
+          <div className="trend-meaning-table">
+            <div><strong>持续下行</strong><span>通常意味着无风险收益率下降，权益估值空间可能抬升，但也可能反映增长预期走弱。</span></div>
+            <div><strong>持续上行</strong><span>通常意味着资金机会成本提高，估值承压，需要更厚的风险溢价。</span></div>
+            <div><strong>低位横盘 (&lt;2.5%)</strong><span>通常意味着资产荒环境，股市估值中枢可能抬升，但需关注盈利质量是否同步改善。</span></div>
+          </div>
+        </>
       )}
     </article>
   );
+}
+
+function PercentileCard({
+  section,
+  copy,
+  columns,
+}: {
+  section: ReportSection;
+  copy: { title: string; eyebrow: string; summary?: string };
+  columns: TableColumn[];
+}) {
+  const rows = section.rows ?? [];
+  const details = asRecord(section.details);
+  const percentile = numberValue(details.percentile);
+  return (
+    <article className={`report-section percentile-section ${percentileTone(percentile)}`} id={section.id}>
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <h2>{copy.title}</h2>
+        </div>
+        <span>{formatPercent(percentile)}</span>
+      </div>
+      <p className="section-summary">{copy.summary ?? section.summary}</p>
+      <div className="market-card-grid">
+        <InfoCard label="当前值" value={formatCell(details.current, { key: "current", label: "当前值", kind: section.id === "pe_percentile" ? "multiple" : "number" })} note={`样本 ${details.sample_count ?? "—"} 年`} />
+        <InfoCard label="近十年分位" value={formatPercent(percentile)} note={percentileWarning(percentile)} />
+        <InfoCard label="历史区间" value={formatRange(details.hist_min, details.hist_max)} note={`中位数 ${formatMaybeNumber(details.hist_median)}`} />
+        <InfoCard label="相对中位数" value={formatPercent(details.current_vs_median_pct)} note={String(details.method ?? "")} />
+      </div>
+      <LineChart title={section.id === "pe_percentile" ? "PE 分位走势图" : "EPS 分位走势图"} rows={rows} xKey="year" yKey={section.id === "pe_percentile" ? "pe" : "eps"} details={details} referenceKeys={["hist_median", "current"]} unit={section.id === "pe_percentile" ? "x" : ""} />
+      {rows.length > 0 && <DataTable rows={rows} columns={columns} sectionId={section.id} />}
+    </article>
+  );
+}
+
+function InfoCard({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="info-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note && <small>{note}</small>}
+    </div>
+  );
+}
+
+function DataTable({
+  rows,
+  columns,
+  sectionId,
+}: {
+  rows: Array<Record<string, unknown>>;
+  columns: TableColumn[];
+  sectionId: string;
+}) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column.key}>{column.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {columns.map((column) => (
+                <td key={column.key} className={cellToneClass(sectionId, column, row[column.key])}>{formatCell(row[column.key], column)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LineChart({
+  title,
+  rows,
+  xKey,
+  yKey,
+  unit,
+  details,
+  referenceKeys = [],
+}: {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+  xKey: string;
+  yKey: string;
+  unit?: string;
+  details?: unknown;
+  referenceKeys?: string[];
+}) {
+  const points = rows
+    .map((row) => ({ x: String(row[xKey] ?? ""), y: numberValue(row[yKey]) }))
+    .filter((point): point is { x: string; y: number } => point.x !== "" && point.y !== null);
+  if (points.length < 3) {
+    return (
+      <div className="line-chart-card">
+        <h3>{title}</h3>
+        <div className="missing-block">数据不足，无法绘图</div>
+      </div>
+    );
+  }
+  const detailMap = asRecord(details);
+  const references = referenceKeys
+    .map((key) => ({ key, value: numberValue(detailMap[key]) }))
+    .filter((ref): ref is { key: string; value: number } => ref.value !== null);
+  const values = [...points.map((point) => point.y), ...references.map((ref) => ref.value)];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max === min ? 1 : max - min;
+  const width = Math.max(520, points.length * 54);
+  const height = 220;
+  const pad = 34;
+  const sx = (index: number) => pad + (index / (points.length - 1)) * (width - pad * 2);
+  const sy = (value: number) => height - pad - ((value - min) / span) * (height - pad * 2);
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${sx(index).toFixed(1)} ${sy(point.y).toFixed(1)}`).join(" ");
+  return (
+    <div className="line-chart-card">
+      <h3>{title}</h3>
+      <div className="line-chart-scroll">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+          <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} className="axis" />
+          <line x1={pad} y1={pad} x2={pad} y2={height - pad} className="axis" />
+          {references.map((ref) => {
+            const y = sy(ref.value);
+            return (
+              <g key={ref.key}>
+                <line x1={pad} y1={y} x2={width - pad} y2={y} className="reference-line" />
+                <text x={width - pad + 4} y={y + 4} className="chart-label">{referenceLabel(ref.key)} {formatChartNumber(ref.value, unit)}</text>
+              </g>
+            );
+          })}
+          <path d={path} className="trend-line" />
+          {points.map((point, index) => (
+            <g key={`${point.x}-${index}`}>
+              <circle cx={sx(index)} cy={sy(point.y)} r="3.2" className="trend-dot" />
+              {index % Math.ceil(points.length / 8) === 0 || index === points.length - 1 ? (
+                <text x={sx(index)} y={height - 10} textAnchor="middle" className="chart-label">{point.x.slice(0, 7)}</text>
+              ) : null}
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  return {};
+}
+
+function numberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatPrice(value: unknown): string {
+  const number = numberValue(value);
+  return number === null ? "—" : `${number.toFixed(2)} 元`;
+}
+
+function formatPercent(value: unknown): string {
+  const number = numberValue(value);
+  return number === null ? "—" : `${number.toFixed(2)}%`;
+}
+
+function formatMultiple(value: unknown): string {
+  const number = numberValue(value);
+  return number === null ? "—" : `${number.toFixed(2)}x`;
+}
+
+function formatMaybeNumber(value: unknown): string {
+  const number = numberValue(value);
+  return number === null ? "—" : number.toFixed(2);
+}
+
+function formatRange(low: unknown, high: unknown, suffix = ""): string {
+  const lowNumber = numberValue(low);
+  const highNumber = numberValue(high);
+  if (lowNumber === null || highNumber === null) return "—";
+  return `${lowNumber.toFixed(2)}${suffix} - ${highNumber.toFixed(2)}${suffix}`;
+}
+
+function formatChartNumber(value: number, unit?: string): string {
+  return `${value.toFixed(2)}${unit ?? ""}`;
+}
+
+function referenceLabel(key: string): string {
+  const labels: Record<string, string> = {
+    hist_median: "中位",
+    current: "当前",
+    bond_mean: "均值",
+    bond_latest: "当前",
+  };
+  return labels[key] ?? key;
+}
+
+function erpStatusText(status: string): string {
+  if (status === "sufficient") return "风险补偿充足";
+  if (status === "thin") return "利差偏薄，需要继续观察";
+  if (status === "negative") return "盈利率低于国债收益率";
+  return "缺少个股 PE 或国债数据";
+}
+
+function percentileTone(value: number | null): string {
+  if (value === null) return "missing";
+  if (value >= 85) return "hot";
+  if (value >= 70) return "warm";
+  return "normal";
+}
+
+function percentileWarning(value: number | null): string {
+  if (value === null) return "分位数据缺失";
+  if (value >= 85) return "高于 85%，红色警示";
+  if (value >= 70) return "高于 70%，黄色警示";
+  return "未触发高分位警示";
 }
 
 function formatMetricValue(value: unknown, status: string): string {
@@ -495,6 +824,7 @@ function isLongMetricValue(value: unknown): boolean {
 
 function formatCell(value: unknown, column?: TableColumn): string {
   if (value === null || value === undefined) return "缺失";
+  if (Array.isArray(value)) return value.join("/");
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return "缺失";
     if (column?.kind === "money" || (!column?.kind && Math.abs(value) >= 100000000)) return `${(value / 100000000).toFixed(2)} 亿`;
@@ -539,6 +869,127 @@ function sectionCopy(section: ReportSection) {
     eyebrow: section.id.replaceAll("_", " "),
     summary: section.summary ?? undefined,
   };
+}
+
+function BuffettMungerOverview({ sections, snapshot }: { sections: ReportSection[]; snapshot: ReportSnapshot }) {
+  const quality = sectionSignal(sections.find((section) => section.id === "quality")?.items ?? []);
+  const moat = sectionSignal(sections.find((section) => section.id === "pricing_power")?.items ?? []);
+  const safety = sectionSignal(sections.find((section) => section.id === "capital_safety")?.items ?? []);
+  const valuation = sectionSignal(sections.find((section) => section.id === "valuation")?.items ?? []);
+
+  return (
+    <section className="buffett-overview" id="buffett_overview">
+      <h2>巴芒总览</h2>
+      <p>这一屏先回答五件事：企业质量、护城河、财务安全、当前估值和是否值得继续深挖。</p>
+      <div className="buffett-grid">
+        <SummaryCard title="企业质量" value={quality.label} note="基于经营质量指标综合判断" tone={quality.tone} />
+        <SummaryCard title="护城河判断" value={moat.label} note="基于提价权与运营效率指标" tone={moat.tone} />
+        <SummaryCard title="财务安全" value={safety.label} note="结合负债、净现金和资本结构信号" tone={safety.tone} />
+        <SummaryCard title="当前估值" value={valuation.label} note="多个估值锚点交叉核对" tone={valuation.tone} />
+      </div>
+      <div className="summary-conclusion">总结判断：{overallConclusion([quality.tone, moat.tone, safety.tone, valuation.tone])}</div>
+      <div className="summary-traits">
+        <strong>特征速写：</strong>
+        {snapshot.company.name}目前在经营质量、护城河、财务安全和估值四个维度中的综合表现为“{overallLabel([quality.tone, moat.tone, safety.tone, valuation.tone])}”。
+      </div>
+    </section>
+  );
+}
+
+function SummaryCard({ title, value, note, tone }: { title: string; value: string; note: string; tone: "good" | "warn" | "bad" }) {
+  return (
+    <article className={`summary-card ${tone}`}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{note}</p>
+    </article>
+  );
+}
+
+function sectionSignal(items: ReportItem[]): { tone: "good" | "warn" | "bad"; label: string } {
+  const badCount = items.filter((item) => ["warning", "error"].includes(item.status)).length;
+  const total = Math.max(items.length, 1);
+  const ratio = badCount / total;
+  if (ratio >= 0.5) return { tone: "bad", label: "需谨慎" };
+  if (ratio >= 0.25) return { tone: "warn", label: "中性偏谨慎" };
+  return { tone: "good", label: "相对稳健" };
+}
+
+function overallConclusion(tones: Array<"good" | "warn" | "bad">): string {
+  if (tones.includes("bad")) return "暂时更像观察标的，还需要更多安全边际。";
+  if (tones.includes("warn")) return "基本面具备跟踪价值，但仍需继续验证关键风险项。";
+  return "整体质量较稳，具备继续深入研究的基础。";
+}
+
+function overallLabel(tones: Array<"good" | "warn" | "bad">): string {
+  if (tones.includes("bad")) return "观察型";
+  if (tones.includes("warn")) return "平衡型";
+  return "稳健型";
+}
+
+function ValuationOverviewSummary({ section, snapshot }: { section: ReportSection; snapshot: ReportSnapshot }) {
+  const marketContext = asRecord(snapshot.market_context);
+  const marketDate = String(marketContext.bond_latest_date ?? "未知");
+  const marketPe = formatMaybeNumber(marketContext.csi300_pe_ttm);
+  const currentYear = snapshot.coverage.years.at(-1) ?? "未知";
+  const currentPrice = formatPrice(snapshot.current_price);
+  const pegItem = section.items.find((item) => item.label.includes("PEG"));
+  const pegyItem = section.items.find((item) => item.label.includes("PEGY"));
+
+  return (
+    <div className="valuation-brief">
+      当前股价为 {currentPrice}；最新年报年份为 {currentYear}；
+      PEG 口径为 {formatDisplayText(pegItem?.value ? String(pegItem.value) : "未提供")}；
+      PEGY 口径为 {formatDisplayText(pegyItem?.value ? String(pegyItem.value) : "未提供")}；
+      全市场锚点约 {marketPe}x；十年期国债参考日期为 {marketDate}。
+    </div>
+  );
+}
+
+function ValuationAuditTable({ items }: { items: ReportItem[] }) {
+  return (
+    <div className="table-wrap machine-table">
+      <table>
+        <caption>机器可读汇总（低估判定）</caption>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Label</th>
+            <th>Value</th>
+            <th>Rule</th>
+            <th>Status</th>
+            <th>Tone</th>
+            <th>Meaning</th>
+            <th>Implication</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr key={`${item.metric}-${index}`}>
+              <td>{`valuation_metric_${index + 1}`}</td>
+              <td>{formatMetricLabel(item.label)}</td>
+              <td>{formatMetricValue(item.value, item.status)}</td>
+              <td>{formatDisplayText(item.basis ?? "-")}</td>
+              <td>{STATUS_LABELS[item.status] ?? item.status}</td>
+              <td>{formatDisplayText(item.tone ?? "-")}</td>
+              <td>{formatDisplayText(item.what_it_measures ?? item.meaning ?? "-")}</td>
+              <td>{formatDisplayText(item.implication ?? "-")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function cellToneClass(sectionId: string, column: TableColumn, value: unknown): string {
+  if (sectionId !== "owner_earnings_yield") return "";
+  if (!["pess_yield", "base_yield", "leni_yield"].includes(column.key)) return "";
+  const n = numberValue(value);
+  if (n === null) return "";
+  if (n >= 8) return "yield-good";
+  if (n >= 4) return "yield-warn";
+  return "yield-bad";
 }
 
 function tableColumnsFor(sectionId: string, rows: Array<Record<string, unknown>>): TableColumn[] {

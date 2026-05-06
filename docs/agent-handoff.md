@@ -6,7 +6,7 @@ Read this file first in every new AI coding session. It summarizes the current s
 
 ValueScope is a new greenfield project at `/Users/dingyitian/Desktop/ValueScope`.
 
-Sprint 001 is complete under the current conservative annual-report provenance rule. The project has a runnable Python/FastAPI backend, Vite/React frontend, copied `stock-scripts` engine under a legacy namespace, a ValueScope report snapshot facade, tests, and a generated sample snapshot.
+Sprint 002 is complete. The project has a runnable Python/FastAPI backend, Vite/React frontend, copied `stock-scripts` engine under a legacy namespace, a ValueScope report snapshot facade, tests, and a generated v0.2 sample snapshot.
 
 ## Product Direction
 
@@ -14,11 +14,23 @@ ValueScope is a local-first value investing research workstation and screener. T
 
 ## Current Sprint
 
-Sprint 001: Reproduce Single-Stock Financial Report.
+Sprint 002: Full Report Parity with stock-scripts.
 
-Sprint goal: create the first runnable workflow that generates a local single-stock financial report snapshot and renders the report in React.
+Sprint goal: reproduce the complete visual and informational richness of the stock-scripts pricing-power HTML report inside ValueScope's React UI.
 
-Status: Done on 2026-05-06. See `docs/sprints/sprint-001.md` and `docs/progress.md` for completion evidence.
+Status: In progress after parity-closure implementation pass on 2026-05-06.
+
+- A coverage audit addendum was added to `docs/sprints/sprint-002.md`.
+- Existing stories US-006 through US-012 now have stricter, machine-checkable AC.
+- Missing parity stories US-013 through US-017 were added (share-capital diagnostics, data-quality consistency, as-of mode, bank branch, multi-market readiness).
+- UI implementation pass completed for major closure items in `src/App.tsx` and `src/styles.css`:
+  - generated time in header
+  - sticky bar threshold behavior
+  - `巴芒总览` summary block
+  - valuation overview context paragraph
+  - valuation machine-readable summary table
+  - market trend table third scenario row
+  - chart insufficient-data rule and OE yield threshold coloring
 
 ## Last Completed
 
@@ -51,6 +63,13 @@ Status: Done on 2026-05-06. See `docs/sprints/sprint-001.md` and `docs/progress.
 - Added explicit Sprint 001 MVP sections for cash flow, capital safety, and shareholder returns.
 - Tightened annual history so unverified 2025 data is excluded; the current sample covers 1995 through 2024 and shows a warning for the excluded 2025 row.
 - Filtered shareholder-return/retained-earnings windows to the same confirmed annual coverage set.
+- Completed Sprint 002 report parity:
+  - upgraded report snapshot schema to v0.2
+  - added `current_price`, `market_context`, enhanced valuation badges/explanations, PE/EPS percentile nodes, and normalized yearly arrays
+  - rendered market environment cards and bond-yield line chart
+  - rendered valuation badges, "衡量什么/背后含义" explanations, PE/EPS charts, percentile panels, and scrollable yearly tables
+  - regenerated the committed `000858` sample snapshot with `--years 10`
+  - captured Sprint 002 desktop/mobile screenshots in `test-results/`
 - Expanded `docs/backlog.md` with report reproduction stories:
   - annual report rows
   - metric definitions and rating rules
@@ -68,15 +87,15 @@ Status: Done on 2026-05-06. See `docs/sprints/sprint-001.md` and `docs/progress.
 
 ## Next Best Step
 
-Plan Sprint 002 from the completed Sprint 001 baseline. The React report UI renders a generated `000858` A-share snapshot in Chinese, with core sections, warnings, full annual history, and no database dependency. The next best product/engineering step is to replace the conservative annual cutoff with explicit provider-level `REPORT_TYPE=年报` provenance when the data adapter exposes it, then add a dedicated share-capital/diagnostics table.
+Execute the tightened Sprint 002 delta items before starting Sprint 003.
 
-Recommended next planning questions:
+Immediate implementation order:
 
-- Which capability-map stories belong in Sprint 002 now that Sprint 001 is closed?
-- Should `/api/generate-report` become a background job/status flow if live generation is slow?
-- Which copied legacy modules should remain visible in Sprint 001 versus hidden behind the facade?
-- Which fields need richer labels, units, and Chinese metric language so the React report feels as informative as the original HTML?
-- How should ValueScope store annual-report provenance so quarterly/interim data can never be mistaken for annual history?
+1. Re-run side-by-side visual QA against the 600285 reference HTML and record remaining gaps with screenshots.
+2. Decide whether `巴芒总览` should become snapshot-native (currently rendered from section-tone heuristics).
+3. Implement US-013 (share-capital diagnostics section).
+4. Implement US-014 (data-quality consistency contract + fixture coverage).
+5. Move US-015 through US-017 to Sprint 003 only with explicit rationale if not implemented now.
 
 ## Guardrails
 
@@ -94,6 +113,7 @@ Recommended next planning questions:
 
 - `/Users/dingyitian/Desktop/stock-scripts`: financial report capability and metric reference only; do not import or wrap it at runtime.
 - ValueScope now contains a copied, namespaced version of `stock-scripts` in `python/valuescope/legacy_stock_scripts`; new code should use `valuescope.report_snapshot`, not import legacy modules directly.
+- The committed sample is `public/samples/company_report_snapshot.json` using schema v0.2. It intentionally compresses bond-yield history to month-end points plus the latest point to keep the JSON inspectable.
 - `/Users/dingyitian/Desktop/QuantumValue-Terminal`: product experience reference only.
 
 ## Session Closeout Requirement

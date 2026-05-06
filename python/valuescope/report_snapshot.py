@@ -11,7 +11,7 @@ import pandas as pd
 
 from valuescope.legacy_stock_scripts.core import orchestrator
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 DEFAULT_OUTPUT_DIR = Path("data/report_snapshots")
 ALL_ANNUAL_HISTORY_YEARS = 80
 
@@ -105,6 +105,10 @@ def _snapshot_from_render_payload(
     valuation_history = _filter_rows_to_annual_years(valuation_history, rows)
     oe_yield_history = _filter_rows_to_annual_years(kwargs.get("oe_yield_history") or [], rows)
     dollar_retention = _filter_dollar_retention_to_annual_years(kwargs.get("dollar_retention"), rows)
+    current_price = _current_price(asof_price=asof_price, diagnostics=diagnostics)
+    market_context = _market_context(kwargs.get("market_env_data"))
+    pe_percentile = _percentile_context((valuation_details or {}).get("pe_percentile_history"), "pe")
+    eps_percentile = _percentile_context((valuation_details or {}).get("eps_percentile_history"), "eps")
 
     coverage_years = [str(row.get("year")) for row in rows if row.get("year") is not None]
     company_market = "CN-A"
@@ -116,9 +120,12 @@ def _snapshot_from_render_payload(
     warnings = _warnings_from_quality(data_quality) + annual_warnings
     sections = [
         _overview_section(conclusions, data_quality),
+        _market_context_section(market_context),
         _metric_section("quality", "Quality", metrics),
         _metric_section("pricing_power", "Pricing Power", ses_metrics),
         _metric_section("valuation", "Valuation", valuation_metrics),
+        _percentile_section("pe_percentile", "PE Percentile", pe_percentile),
+        _percentile_section("eps_percentile", "EPS Percentile", eps_percentile),
         _cash_flow_section(rows),
         _capital_safety_section(diagnostics),
         _shareholder_returns_section(dollar_retention),
@@ -148,6 +155,10 @@ def _snapshot_from_render_payload(
             "accounting_unit": "CNY" if company_market == "CN-A" else None,
             "is_bank": is_bank,
         },
+        "current_price": current_price,
+        "market_context": market_context,
+        "pe_percentile": pe_percentile,
+        "eps_percentile": eps_percentile,
         "coverage": {
             "period_type": "annual",
             "years": coverage_years,
@@ -171,6 +182,168 @@ def _metric_section(section_id: str, title: str, assessments: Any) -> Dict[str, 
         "title": title,
         "summary": None,
         "items": items,
+        "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _current_price(*, asof_price: Optional[float], diagnostics: Any) -> Optional[float]:
+    if asof_price is not None:
+        return float(asof_price)
+    if isinstance(diagnostics, dict) and isinstance(diagnostics.get("price"), (int, float)):
+        return float(diagnostics["price"])
+    return None
+
+
+def _market_context(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+    dates = value.get("bond_dates") or []
+    yields = value.get("bond_values") or []
+    series = []
+    for date, yield_pct in zip(dates, yields):
+        if yield_pct is None:
+            continue
+        series.append({"date": str(date)[:10], "yield_pct": float(yield_pct)})
+    series = _monthly_series(series)
+
+    latest = _safe_float(value.get("bond_latest"))
+    csi300_pe = _safe_float(value.get("csi300_pe"))
+    csi300_ey = _safe_float(value.get("csi300_ey"))
+    erp_stock = _safe_float(value.get("erp_stock"))
+    return {
+        "bond_label": value.get("bond_label") or "中国十年期国债收益率",
+        "bond_latest": latest,
+        "bond_latest_date": value.get("bond_latest_date"),
+        "bond_percentile": _safe_float(value.get("bond_pctile")),
+        "bond_min": _safe_float(value.get("bond_min")),
+        "bond_max": _safe_float(value.get("bond_max")),
+        "bond_mean": _safe_float(value.get("bond_mean")),
+        "csi300_pe_ttm": csi300_pe,
+        "csi300_earnings_yield": csi300_ey,
+        "market_equity_risk_premium": _safe_float(value.get("erp")),
+        "stock_equity_risk_premium": erp_stock,
+        "stock_erp_status": _erp_status(erp_stock),
+        "summary": value.get("env_label"),
+        "bond_yield_series": series,
+    }
+
+
+def _monthly_series(series: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    monthly: Dict[str, Dict[str, Any]] = {}
+    for point in series:
+        date = str(point.get("date") or "")
+        if len(date) < 7:
+            continue
+        monthly[date[:7]] = point
+    compact = [monthly[key] for key in sorted(monthly)]
+    if series and (not compact or compact[-1].get("date") != series[-1].get("date")):
+        compact.append(series[-1])
+    return compact
+
+
+def _market_context_section(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not context:
+        return {
+            "id": "market_context",
+            "title": "Market Context",
+            "summary": "市场环境数据缺失。",
+            "items": [],
+            "details": {"status": "missing", "message": "数据缺失"},
+            "rows": [],
+            "warnings": [{"code": "market_context_missing", "message": "市场环境数据缺失。", "severity": "warning"}],
+        }
+    return {
+        "id": "market_context",
+        "title": "Market Context",
+        "summary": context.get("summary"),
+        "items": [
+            _display_item("bond_latest", "中国10Y国债", context.get("bond_latest"), "十年期国债收益率最新值。", unit="percent"),
+            _display_item("bond_percentile", "历史分位", context.get("bond_percentile"), "近十年国债收益率历史分位。", unit="percent"),
+            _display_item("csi300_pe_ttm", "沪深300 PE", context.get("csi300_pe_ttm"), "沪深300滚动市盈率。", unit="multiple"),
+            _display_item("market_equity_risk_premium", "股债风险溢价", context.get("market_equity_risk_premium"), "沪深300盈利率减十年期国债收益率。", unit="percent"),
+        ],
+        "details": context,
+        "rows": context.get("bond_yield_series") or [],
+        "warnings": [],
+    }
+
+
+def _erp_status(value: Optional[float]) -> Optional[str]:
+    if value is None:
+        return None
+    if value >= 3:
+        return "sufficient"
+    if value >= 0:
+        return "thin"
+    return "negative"
+
+
+def _percentile_context(value: Any, kind: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+    clean = _jsonable(value)
+    if not isinstance(clean, dict):
+        return None
+    points = clean.get("points") or []
+    series = []
+    if kind == "pe":
+        current = clean.get("current_pe")
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            series.append({
+                "year": str(point.get("fiscal_year") or point.get("year") or ""),
+                "price": point.get("anchor_price"),
+                "eps": point.get("real_eps") if point.get("real_eps") is not None else point.get("basic_eps"),
+                "pe": point.get("real_pe") if point.get("real_pe") is not None else point.get("basic_pe"),
+                "anchor_date": point.get("anchor_date"),
+            })
+    else:
+        current = clean.get("current_value")
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            series.append({
+                "year": str(point.get("fiscal_year") or point.get("year") or ""),
+                "eps": point.get("value"),
+                "real_eps": point.get("real_eps"),
+                "basic_eps": point.get("basic_eps"),
+                "basis": point.get("real_eps_src"),
+            })
+    return {
+        "kind": kind,
+        "current": current,
+        "percentile": clean.get("percentile"),
+        "hist_min": clean.get("hist_min"),
+        "hist_median": clean.get("hist_median"),
+        "hist_max": clean.get("hist_max"),
+        "hist_mean": clean.get("hist_mean"),
+        "current_vs_median_pct": clean.get("current_vs_median_pct"),
+        "sample_count": clean.get("sample_count"),
+        "method": clean.get("method"),
+        "note": clean.get("note"),
+        "series": series,
+        "raw": clean,
+    }
+
+
+def _percentile_section(section_id: str, title: str, context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if context is None:
+        return None
+    label = "PE 近十年历史分位" if context.get("kind") == "pe" else "E（EPS）近十年历史分位"
+    items = [
+        _display_item("current", "当前值", context.get("current"), "当前估值或盈利口径。", unit="multiple" if context.get("kind") == "pe" else None),
+        _display_item("percentile", "近十年分位", context.get("percentile"), "当前值在历史样本中的位置。", unit="percent"),
+        _display_item("history_range", "历史区间", _range_display(context.get("hist_min"), context.get("hist_max")), "历史样本最小值到最大值。"),
+        _display_item("current_vs_median_pct", "相对中位数", context.get("current_vs_median_pct"), "当前值相对历史中位数的偏离。", unit="percent"),
+    ]
+    return {
+        "id": section_id,
+        "title": title,
+        "summary": context.get("note") or label,
+        "items": items,
+        "details": context,
+        "rows": context.get("series") or [],
         "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
     }
 
@@ -243,6 +416,25 @@ def _display_number(value: Any, unit: Optional[str] = None) -> Any:
     if unit == "multiple":
         return f"{value:.2f} 倍"
     return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        if value is not None:
+            return float(value)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _range_display(low: Any, high: Any) -> Optional[str]:
+    low_num = _safe_float(low)
+    high_num = _safe_float(high)
+    if low_num is None or high_num is None:
+        return None
+    return f"{low_num:.2f} - {high_num:.2f}"
 
 
 def _latest_annual_row(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -508,11 +700,47 @@ def _assessment_to_item(assessment: Any) -> Dict[str, Any]:
         "value": data.get("value_display"),
         "status": status,
         "tone": tone,
+        "badge": _badge_label(label, status, data.get("status_text"), data.get("value_display")),
+        "badge_color": _badge_color(status, tone),
+        "what_it_measures": data.get("meaning"),
         "basis": data.get("formula") or data.get("rule_display") or data.get("meaning"),
         "meaning": data.get("meaning"),
         "implication": data.get("implication"),
         "warning": warning,
     }
+
+
+def _badge_color(status: str, tone: str) -> Optional[str]:
+    if status in {"missing", "not_applicable"}:
+        return None
+    if status == "error" or tone == "bad":
+        return "red"
+    if status == "warning" or tone == "warn":
+        return "yellow"
+    if status == "ok" and tone == "good":
+        return "green"
+    return None
+
+
+def _badge_label(label: str, status: str, status_text: Any, value_display: Any) -> Optional[str]:
+    if status == "missing":
+        return "数据缺失"
+    if status == "not_applicable":
+        return "不适用"
+    text = str(status_text or value_display or "")
+    if status == "ok":
+        if label == "OE-DCF":
+            return "满足安全边际"
+        if "芒格" in label:
+            return "25x场景显著高于现价"
+        if "国债" in label:
+            return "风险溢价通过"
+        return text[:18] or "通过"
+    if status == "warning":
+        return text[:18] or "需关注"
+    if status == "error":
+        return "计算失败"
+    return None
 
 
 def _status_from_tone_and_text(tone: str, value_display: Any, status_text: Any) -> str:

@@ -28,10 +28,10 @@ Run the local generator:
 
 ```bash
 python3 -m pip install -e '.[test]'
-PYTHONPATH=python python3 -m valuescope.cli 000858 --years 8
+PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10
 ```
 
-This writes `data/report_snapshots/company_report_snapshot.json`. The committed browser sample is `public/samples/company_report_snapshot.json`.
+This writes `data/report_snapshots/company_report_snapshot.json`. The committed browser sample is `public/samples/company_report_snapshot.json` and currently uses report snapshot schema v0.2 with current price, market context, valuation explanations, PE/EPS percentile nodes, and yearly valuation tables.
 
 Run the MVP locally:
 

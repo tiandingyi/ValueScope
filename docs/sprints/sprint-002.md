@@ -1,5 +1,15 @@
 # Sprint 002: Full Report Parity with stock-scripts
 
+Status: Done on 2026-05-06.
+
+Completion evidence:
+
+- Snapshot schema is v0.2 and the committed `000858` sample includes `current_price`, `market_context`, enhanced valuation cards, PE/EPS percentile nodes, valuation history, and OE yield history.
+- React renders the report header, sticky report identity bar, market environment section, valuation badges/explanations, PE/EPS line charts, percentile blocks, and scrollable yearly tables.
+- Verified with Python tests, Vitest, production build, Playwright E2E, and desktop/mobile screenshots:
+  - `test-results/current-valuescope-sprint2-desktop.png`
+  - `test-results/current-valuescope-sprint2-mobile.png`
+
 ## Sprint Goal
 
 Reproduce the complete visual and informational richness of the stock-scripts pricing-power HTML report inside ValueScope's React UI. After this sprint, a side-by-side comparison of the two reports for the same company should show equivalent section coverage, data density, chart presence, and context explanations.
@@ -140,3 +150,116 @@ Demo 脚本：
 - Recharts / Chart.js 打包体积需评估，避免首屏过慢。
 - 逐年数组数据量大时（30+ 年），注意 JSON snapshot 和渲染性能。
 - 移动端图表横向滚动实现需细化，防止影响页面竖向滚动手势。
+
+## Post-Review Addendum (Coverage Audit)
+
+Date: 2026-05-06
+
+Purpose: tighten Sprint 002 acceptance quality and close parity-scope blind spots found during the user-story audit.
+
+### A. Tightened AC for Existing Stories (US-006 to US-012)
+
+US-006:
+
+- `current_price` missing -> both report cover and sticky bar must show `—`, and the same fallback formatter must be used in both places.
+- Color words (`绿色`/`黄色`/`红色`) must be colorized with contrast-safe tokens and have screenshot evidence in desktop + mobile.
+
+US-007:
+
+- Sticky bar must appear only after scrollY >= 100 and be hidden above that threshold.
+- Sticky bar must keep tab navigation clickable and must not cover section headings.
+
+US-008:
+
+- `market_context` missing state must include a machine-checkable marker (`details.status = "missing"`) and visible UI placeholder text.
+- Bond chart must render both `bond_mean` and `bond_latest` reference lines when values are present.
+
+US-009:
+
+- Valuation cards must render `badge`, `what_it_measures`, and `implication` from snapshot values only; no hard-coded fallback copy.
+- OE-DCF sensitivity text must be sourced from snapshot and tested with one explicit assertion.
+
+US-010:
+
+- Insufficient-series rule is standardized: fewer than 3 valid points -> show `数据不足，无法绘图`.
+- Mobile 375px screenshot must show horizontal chart scrolling without clipping axis labels.
+
+US-011:
+
+- OE yearly table must apply value-color thresholds on yield columns: >= 8 green, 4-8 yellow, < 4 red.
+- Yearly tables must preserve full year coverage order from snapshot (no implicit slicing).
+
+US-012:
+
+- Percentile warning labels must be visible in both card summary and section tone class.
+- Missing percentile node must render `分位数据暂缺` (not generic empty table).
+
+### B. Additional User Stories Required for Parity Completeness
+
+US-013: Share-Capital Diagnostics as First-Class Section (P1)
+
+Goal:
+
+- Promote share-basis diagnostics from mixed details into a dedicated section/table for valuation trustworthiness.
+
+Acceptance Criteria:
+
+- Snapshot includes explicit share-capital diagnostics fields (valuation basis, report basis, fallback reason, confidence).
+- UI renders a dedicated share-capital diagnostics block with pass/warn/fail tone.
+- Existing regression around historical share basis remains green.
+
+US-014: Data-Quality Consistency Contract (P1)
+
+Goal:
+
+- Ensure every newly added section has deterministic missing/warning/not-applicable behavior.
+
+Acceptance Criteria:
+
+- For `current_price`, `market_context`, `pe_percentile`, `eps_percentile`, and valuation enhancements, each field has a documented fallback state in schema doc.
+- UI placeholders are section-specific and stable (no generic blank render).
+- Add one test fixture with mixed missing/warning states and assert visible labels.
+
+US-015: As-Of Mode Report Surface (P2)
+
+Goal:
+
+- Expose historical point-in-time report generation and rendering to match reference report workflow depth.
+
+Acceptance Criteria:
+
+- Generator supports as-of mode metadata (`source.mode = as_of`, date/year context).
+- UI explicitly shows as-of context and prevents accidental confusion with current mode.
+- At least one as-of snapshot sample or test fixture is included.
+
+US-016: Bank-Branch Report Path (P2)
+
+Goal:
+
+- Add explicit bank/non-bank branch handling to avoid metric misuse.
+
+Acceptance Criteria:
+
+- Snapshot includes bank-specific section set when `company.is_bank = true`.
+- Non-bank-only metrics are hidden or marked not-applicable for bank companies.
+- One bank sample snapshot passes schema and renders without broken sections.
+
+US-017: Multi-Market Field Readiness (P2)
+
+Goal:
+
+- Enforce market/currency/accounting clarity beyond CN-A assumptions.
+
+Acceptance Criteria:
+
+- Header and side metadata always display market/currency/accounting unit from snapshot.
+- Formatting logic avoids CN-A-only assumptions in labels/units.
+- At least one non-CN-A fixture validates no UI breakage.
+
+### C. Revised Completion Gate for Sprint 002
+
+Sprint 002 is considered fully closed only when:
+
+- US-006 to US-012 tightened AC checks all pass.
+- US-013 and US-014 are completed.
+- US-015 to US-017 are either completed or formally moved to Sprint 003 with explicit rationale and backlog links.

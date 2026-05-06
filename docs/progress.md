@@ -24,6 +24,107 @@ Notes:
 - Decisions, tradeoffs, or risks future agents should know.
 ```
 
+## 2026-05-06
+
+### Sprint 002 Parity Closure Implementation Pass
+
+Status: In Progress
+
+Changed:
+
+- Implemented major parity-gap UI additions in `src/App.tsx` and `src/styles.css`:
+  - report header now includes generated time
+  - sticky report identity bar now appears after scroll threshold (`>=100px`)
+  - added a dedicated `巴芒总览` summary block
+  - added valuation overview context paragraph before valuation audit details
+  - added machine-readable valuation summary table for valuation cards
+  - expanded market trend meaning table with low-rate sideways scenario row
+  - unified line-chart insufficient-data rule to `<3 points -> 数据不足，无法绘图`
+  - added OE yearly yield table threshold coloring (`>=8` green, `4-8` yellow, `<4` red)
+- Generated fresh 600285 snapshot for parity baseline comparison.
+
+Verified:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 600285 --years 20`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run build`
+- `npm test -- --run`
+- `npm run test:e2e`
+
+Next:
+
+- Re-run side-by-side visual comparison with the 600285 stock-scripts HTML report and list any remaining structural gaps.
+- Decide whether `巴芒总览` should remain heuristic or become a snapshot-native section.
+
+Notes:
+
+- This pass focuses on parity closure and AC alignment; no database or cloud dependency was introduced.
+
+### Sprint 002 Story Coverage Audit
+
+Status: Done
+
+Changed:
+
+- Audited Sprint 002 user-story completeness against the stock-scripts capability map and current implementation behavior.
+- Updated `docs/sprints/sprint-002.md` with a post-review addendum that:
+  - tightens acceptance criteria for US-006 through US-012
+  - adds missing parity stories US-013 through US-017 (share-capital diagnostics, data-quality consistency, as-of mode, bank branch, multi-market readiness)
+  - defines a revised sprint completion gate for strict closure.
+
+Verified:
+
+- Document cross-check:
+  - `docs/sprints/sprint-002.md`
+  - `docs/reference/stock-scripts-capability-map.md`
+  - implementation references in `src/App.tsx`, `src/reportSnapshot.ts`, and `python/valuescope/report_snapshot.py`
+
+Next:
+
+- Implement tightened AC deltas first (sticky trigger threshold, chart insufficient-data rule, OE yield table threshold coloring).
+- Then execute US-013 and US-014 as required for strict Sprint 002 closure.
+
+Notes:
+
+- This update improves story-card completeness and testability; it does not change runtime code behavior by itself.
+
+### Sprint 002 Full Report Parity Pass
+
+Status: Done
+
+Changed:
+
+- Upgraded company report snapshot schema to v0.2.
+- Added `current_price`, `market_context`, `pe_percentile`, and `eps_percentile` to the Python snapshot facade.
+- Normalized market environment data from the copied legacy engine into an inspectable monthly bond-yield chart series plus market/stock risk-premium fields.
+- Enhanced valuation items with `badge`, `badge_color`, `what_it_measures`, `meaning`, and `implication`, preserving OE-DCF sensitivity text from the source metric language.
+- Added React rendering for the 4-column report header, colored green/yellow/red explanation words, sticky company/code/price bar, market environment cards, risk-premium callout, line charts, PE/EPS percentile panels, and scrollable yearly tables.
+- Regenerated the committed `000858` sample snapshot using `--years 10`.
+- Updated tests to assert v0.2 fields and new UI sections.
+- Updated `README.md`, `docs/report-snapshot-schema.md`, and `docs/sprints/sprint-002.md`.
+
+Verified:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm test -- --run`
+- `npm run build`
+- `npm run test:e2e`
+- Captured desktop and mobile Sprint 002 screenshots:
+  - `test-results/current-valuescope-sprint2-desktop.png`
+  - `test-results/current-valuescope-sprint2-mobile.png`
+
+Next:
+
+- Decide Sprint 003 scope. Good candidates: provider-level annual `REPORT_TYPE=年报` provenance, dedicated share-capital diagnostics table, or background job/status UX for slower live generation.
+
+Notes:
+
+- No database dependency was added.
+- No buy/sell guidance language was added.
+- The market context section degrades to `数据缺失`; missing `current_price` renders as `—`.
+- The committed market-context chart series is compressed to month-end points plus the latest point so the sample remains inspectable.
+
 ## 2026-05-05
 
 ### Sprint 001 Runnable Skeleton

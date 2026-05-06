@@ -8,6 +8,9 @@ export const reportItemSchema = z.object({
   value: z.unknown().nullable().optional(),
   status: statusSchema,
   tone: z.string().optional(),
+  badge: z.string().nullable().optional(),
+  badge_color: z.enum(["green", "yellow", "red"]).nullable().optional(),
+  what_it_measures: z.string().nullable().optional(),
   basis: z.string().nullable().optional(),
   meaning: z.string().nullable().optional(),
   implication: z.string().nullable().optional(),
@@ -45,6 +48,10 @@ export const reportSnapshotSchema = z.object({
     accounting_unit: z.string().nullable().optional(),
     is_bank: z.boolean().optional(),
   }),
+  current_price: z.number().nullable().optional(),
+  market_context: z.unknown().nullable().optional(),
+  pe_percentile: z.unknown().nullable().optional(),
+  eps_percentile: z.unknown().nullable().optional(),
   coverage: z.object({
     period_type: z.string(),
     years: z.array(z.string()),
@@ -71,4 +78,3 @@ export async function loadSampleSnapshot(): Promise<ReportSnapshot> {
   const json = await response.json();
   return parseReportSnapshot(json);
 }
-

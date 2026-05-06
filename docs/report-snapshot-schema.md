@@ -6,7 +6,7 @@
 
 ## Version
 
-`schema_version: "0.1.0"`
+`schema_version: "0.2.0"`
 
 ## Purpose
 
@@ -16,7 +16,7 @@ The company report snapshot is the first local data contract between ValueScope'
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "generated_at": "2026-05-05T00:00:00Z",
   "source": {
     "name": "valuescope-python-report",
@@ -32,6 +32,21 @@ The company report snapshot is the first local data contract between ValueScope'
     "currency": "CNY",
     "accounting_unit": "CNY"
   },
+  "current_price": 92.26,
+  "market_context": {
+    "bond_label": "中国十年期国债收益率",
+    "bond_latest": 1.74,
+    "bond_latest_date": "2026-05-06",
+    "bond_percentile": 3.2,
+    "csi300_pe_ttm": 13.5,
+    "csi300_earnings_yield": 7.41,
+    "market_equity_risk_premium": 5.67,
+    "stock_equity_risk_premium": 4.2,
+    "stock_erp_status": "sufficient",
+    "bond_yield_series": [{"date": "2026-05-06", "yield_pct": 1.74}]
+  },
+  "pe_percentile": {},
+  "eps_percentile": {},
   "coverage": {
     "period_type": "annual",
     "years": ["2021", "2022", "2023", "2024"]
@@ -55,6 +70,10 @@ The company report snapshot is the first local data contract between ValueScope'
 - `company.market`: market identifier, initially `CN-A`.
 - `company.currency`: market currency for price and valuation fields.
 - `company.accounting_unit`: accounting currency/unit used by financial statements.
+- `current_price`: current or as-of share price in `company.currency`; may be `null`.
+- `market_context`: optional market environment node used by the report UI. Missing data must be represented as `null` or an omitted node, not synthesized.
+- `pe_percentile`: optional PE historical percentile node.
+- `eps_percentile`: optional EPS/E historical percentile node.
 - `coverage.period_type`: report period basis, initially `annual`.
 - `coverage.years`: all available annual-report years included in the snapshot. Quarterly periods must not appear here.
 - `metric_definitions`: dictionary describing metric semantics.
@@ -74,12 +93,72 @@ The company report snapshot is the first local data contract between ValueScope'
       "label": "PE",
       "value": 18.2,
       "status": "ok",
+      "badge": "满足安全边际",
+      "badge_color": "green",
+      "what_it_measures": "用所有者盈余折现来估算企业长期可提取现金流的现值。",
       "basis": "Price divided by annualized earnings per share.",
+      "meaning": "用价格与盈利比较当前估值。",
+      "implication": "背后含义和敏感性说明。",
       "warning": null
     }
   ]
 }
 ```
+
+Optional item fields added in v0.2:
+
+- `badge`: short UI status text, such as `满足安全边际`, `25x场景显著高于现价`, or `不适用`.
+- `badge_color`: `green`, `yellow`, `red`, or `null`.
+- `what_it_measures`: one-sentence plain-language explanation.
+- `meaning` and `implication`: source metric language and analytical context. These are report explanations, not investment instructions.
+
+## Market Context Shape
+
+`market_context` may be `null`. When present, it should include:
+
+- `bond_label`: source label for the risk-free yield series.
+- `bond_latest`: latest 10-year government bond yield in percentage points.
+- `bond_latest_date`: provider date for `bond_latest`.
+- `bond_percentile`: historical percentile for the yield series.
+- `bond_min`, `bond_max`, `bond_mean`: historical summary statistics.
+- `csi300_pe_ttm`: CSI 300 PE (TTM), when available.
+- `csi300_earnings_yield`: `1 / csi300_pe_ttm * 100`, when available.
+- `market_equity_risk_premium`: market earnings yield minus bond yield.
+- `stock_equity_risk_premium`: current stock earnings yield minus bond yield, when current PE is available.
+- `stock_erp_status`: `sufficient`, `thin`, `negative`, or `null`.
+- `summary`: provider/generator market environment summary.
+- `bond_yield_series`: inspectable chart series. The committed sample stores month-end points plus the latest point to keep JSON small.
+
+## Percentile Shape
+
+`pe_percentile` and `eps_percentile` may be `null`. When present, they use this normalized shape:
+
+```json
+{
+  "kind": "pe",
+  "current": 12.4,
+  "percentile": 42.0,
+  "hist_min": 8.1,
+  "hist_median": 15.2,
+  "hist_max": 38.5,
+  "hist_mean": 17.4,
+  "current_vs_median_pct": -18.4,
+  "sample_count": 10,
+  "method": "post_may_anchor",
+  "note": "历史样本说明。",
+  "series": [
+    {
+      "year": "2024",
+      "price": 92.26,
+      "eps": 2.27,
+      "pe": 40.58,
+      "anchor_date": "2025-05-06"
+    }
+  ]
+}
+```
+
+For EPS nodes, `series` rows use `eps`, `real_eps`, `basic_eps`, and `basis`.
 
 ## Annual Row Shape
 
@@ -112,7 +191,10 @@ Derived sections that depend on yearly history, including cash flow and sharehol
 ## Required MVP Sections
 
 - `overview`
+- `market_context`
 - `valuation`
+- `pe_percentile`
+- `eps_percentile`
 - `quality`
 - `cash_flow`
 - `capital_safety`
