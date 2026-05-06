@@ -252,13 +252,13 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <>
       <header className="topbar">
-        <div className="brand-lockup">
+        <div className="topbar-brand">
           <strong>ValueScope</strong>
           <span>本地价值研究工作台</span>
         </div>
-        <nav aria-label="报告章节">
+        <nav className="topbar-nav" aria-label="报告章节">
           <a href="#overview">总览</a>
           <a href="#valuation">估值</a>
           <a href="#quality">质量</a>
@@ -292,11 +292,13 @@ export function App() {
         </form>
       </header>
 
-      {state.kind === "empty" && <EmptyState />}
-      {state.kind === "loading" && <StatusPanel title="生成中" message={state.message} />}
-      {state.kind === "error" && <StatusPanel title="生成失败" message={state.message} tone="error" />}
-      {state.kind === "ready" && <ReportView snapshot={state.snapshot} />}
-    </main>
+      <div className="wrap">
+        {state.kind === "empty" && <EmptyState />}
+        {state.kind === "loading" && <StatusPanel title="生成中" message={state.message} />}
+        {state.kind === "error" && <StatusPanel title="生成失败" message={state.message} tone="error" />}
+        {state.kind === "ready" && <ReportView snapshot={state.snapshot} />}
+      </div>
+    </>
   );
 }
 
@@ -346,7 +348,7 @@ function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
         <span>{snapshot.company.ticker}</span>
         <span>{formatPrice(snapshot.current_price)}</span>
       </div>
-      <section className="report-cover" id="overview">
+      <section className="hero" id="overview">
         <div>
           <p className="eyebrow">{formatMarket(snapshot.company.market)} · {formatMode(snapshot.source.mode)}</p>
           <h1>{companyName} 财报分析报告</h1>
@@ -354,28 +356,28 @@ function ReportView({ snapshot }: { snapshot: ReportSnapshot }) {
             基于本地数据快照渲染。<span className="text-green">绿色</span>代表接近优秀或低估，<span className="text-amber">黄色</span>代表需要观察，<span className="text-red">红色</span>代表明显偏离目标画像；缺失值保持“缺失”，不会被当作 0。
           </p>
         </div>
-        <dl className="cover-metadata">
-          <div>
-            <dt>股票代码</dt>
-            <dd>{snapshot.company.ticker}</dd>
+        <div className="hero-meta">
+          <div className="box">
+            <div className="k">股票代码</div>
+            <div className="v">{snapshot.company.ticker}</div>
           </div>
-          <div>
-            <dt>覆盖年份</dt>
-            <dd>{snapshot.coverage.years.at(0) ?? "N/A"} - {snapshot.coverage.years.at(-1) ?? "N/A"}</dd>
+          <div className="box">
+            <div className="k">覆盖年份</div>
+            <div className="v">{snapshot.coverage.years.at(0) ?? "N/A"} - {snapshot.coverage.years.at(-1) ?? "N/A"}</div>
           </div>
-          <div>
-            <dt>样本年数</dt>
-            <dd>{snapshot.coverage.years.length} 年</dd>
+          <div className="box">
+            <div className="k">样本年数</div>
+            <div className="v">{snapshot.coverage.years.length} 年</div>
           </div>
-          <div>
-            <dt>当前股价</dt>
-            <dd>{formatPrice(snapshot.current_price)}</dd>
+          <div className="box">
+            <div className="k">当前股价</div>
+            <div className="v">{formatPrice(snapshot.current_price)}</div>
           </div>
-          <div>
-            <dt>生成时间</dt>
-            <dd>{formatDate(snapshot.generated_at)}</dd>
+          <div className="box">
+            <div className="k">生成时间</div>
+            <div className="v">{formatDate(snapshot.generated_at)}</div>
           </div>
-        </dl>
+        </div>
       </section>
 
       <BuffettMungerOverview sections={sections} snapshot={snapshot} />
@@ -499,7 +501,7 @@ function ReportSectionCard({ section, snapshot }: { section: ReportSection; snap
     return <PercentileCard section={section} copy={copy} columns={columns} />;
   }
   return (
-    <article className="report-section" id={section.id}>
+    <article className="section" id={section.id}>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{copy.eyebrow}</p>
@@ -552,7 +554,7 @@ function MarketContextCard({ section, copy }: { section: ReportSection; copy: { 
   const rows = Array.isArray(section.rows) ? section.rows : [];
   const status = String(details.stock_erp_status ?? "missing");
   return (
-    <article className="report-section market-section" id={section.id}>
+    <article className="section market-section" id={section.id}>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{copy.eyebrow}</p>
@@ -600,7 +602,7 @@ function PercentileCard({
   const details = asRecord(section.details);
   const percentile = numberValue(details.percentile);
   return (
-    <article className={`report-section percentile-section ${percentileTone(percentile)}`} id={section.id}>
+    <article className={`section percentile-section ${percentileTone(percentile)}`} id={section.id}>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{copy.eyebrow}</p>
@@ -898,10 +900,10 @@ function BuffettMungerOverview({ sections, snapshot }: { sections: ReportSection
 
 function SummaryCard({ title, value, note, tone }: { title: string; value: string; note: string; tone: "good" | "warn" | "bad" }) {
   return (
-    <article className={`summary-card ${tone}`}>
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <p>{note}</p>
+    <article className={`decision-card tone-${tone}`}>
+      <div className="k">{title}</div>
+      <div className="v">{value}</div>
+      <div className="d">{note}</div>
     </article>
   );
 }
