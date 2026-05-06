@@ -6,7 +6,7 @@
 
 ## Version
 
-`schema_version: "0.2.0"`
+`schema_version: "0.3.0"`
 
 ## Purpose
 
@@ -16,7 +16,7 @@ The company report snapshot is the first local data contract between ValueScope'
 
 ```json
 {
-  "schema_version": "0.2.0",
+  "schema_version": "0.3.0",
   "generated_at": "2026-05-05T00:00:00Z",
   "source": {
     "name": "valuescope-python-report",
@@ -112,6 +112,16 @@ Optional item fields added in v0.2:
 - `what_it_measures`: one-sentence plain-language explanation.
 - `meaning` and `implication`: source metric language and analytical context. These are report explanations, not investment instructions.
 
+Section nodes added in v0.3:
+
+- `data_quality`: field coverage, model availability, warning summary, and share-basis confidence.
+- `machine_summary`: stable machine-readable facts for downstream parsing. This is research support, not buy/sell guidance.
+- `share_basis`: first-class share-count source diagnostics, including EPS-derived implied share years and true legacy fallback years.
+- `valuation_scenarios`: owner-earnings/growth/exit-PE scenario rows plus low-valuation resonance and DCF sensitivity details.
+- `valuation_formulas`: model formulas, direction, meaning, caveats, and not-applicable states.
+- `radar_modules`: focused operating, valuation, share-capital, and shareholder-return signals split out for scanning.
+- `technicals`: optional Williams %R 14/28/60-day context, latest values, and chart rows. Technicals must be framed as price-position context, not a trading signal.
+
 ## Market Context Shape
 
 `market_context` may be `null`. When present, it should include:
@@ -188,17 +198,28 @@ Annual report history may include `confirmed_annual` and `confirmed_annual_by_co
 
 Derived sections that depend on yearly history, including cash flow and shareholder returns, must use the same confirmed annual coverage set. They must not keep a later unverified year in a summary window after that year has been excluded from `annual_rows`.
 
+Cash-flow rows use reported cash-flow statement values where available. `ocf` means operating cash flow from the annual cash-flow statement, preferably `经营活动产生的现金流量净额`; if that exact net field is absent but annual operating cash inflow and outflow subtotals are present, `ocf` may be derived as inflow minus outflow. It must not be replaced by net income or another earnings proxy.
+
+Share-basis diagnostics distinguish verified period-end share counts from derived fallbacks. `valuation_shares` / `asof_shares` from share-change history are preferred. If early years lack verified share-change rows, `reported_shares_source = "profit_over_eps_derived"` means the denominator is inferred from parent net profit divided by EPS and must be disclosed as lower-confidence implied share count, not mislabeled as `legacy_shares`.
+
 ## Required MVP Sections
 
 - `overview`
+- `data_quality`
+- `machine_summary`
 - `market_context`
 - `valuation`
+- `valuation_scenarios`
+- `valuation_formulas`
 - `pe_percentile`
 - `eps_percentile`
 - `quality`
+- `radar_modules`
 - `cash_flow`
 - `capital_safety`
+- `share_basis`
 - `shareholder_returns`
+- `technicals`
 - `metric_explanations`
 
 ## Metric Definition Shape

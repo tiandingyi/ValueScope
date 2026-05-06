@@ -58,6 +58,14 @@ def test_generate_report_snapshot_captures_render_payload(tmp_path: Path) -> Non
                 "hist_max": 9.0,
                 "points": [{"fiscal_year": "2024", "value": 8.0, "real_eps": 8.0, "basic_eps": 7.8}],
             },
+            "resonances": ["sample resonance"],
+            "scenario_analysis": {
+                "g_levels": [("基准G", 0.03)],
+                "oe_levels": [("基准OE", 5.0)],
+                "exit_pes": (20,),
+                "dcf_iv": {("基准OE", "基准G"): 100.0},
+                "munger_tables": {20: {("基准OE", "基准G"): 110.0}},
+            },
         },
         [],
         {"price": 100.0, "share_capital": {"rows": []}},
@@ -77,7 +85,7 @@ def test_generate_report_snapshot_captures_render_payload(tmp_path: Path) -> Non
         snapshot = generate_report_snapshot("000858", output_dir=tmp_path)
 
     assert snapshot["company"]["ticker"] == "000858"
-    assert snapshot["schema_version"] == "0.2.0"
+    assert snapshot["schema_version"] == "0.3.0"
     assert snapshot["current_price"] == 100.0
     assert snapshot["coverage"]["years"] == ["2022", "2024"]
     annual_rows = next(section for section in snapshot["sections"] if section["id"] == "annual_rows")
@@ -86,10 +94,16 @@ def test_generate_report_snapshot_captures_render_payload(tmp_path: Path) -> Non
     assert all(row["report_provenance"].startswith("confirmed_annual") for row in annual_rows["rows"])
     section_ids = [section["id"] for section in snapshot["sections"]]
     assert "market_context" in section_ids
+    assert "data_quality" in section_ids
+    assert "machine_summary" in section_ids
     assert "pe_percentile" in section_ids
     assert "eps_percentile" in section_ids
+    assert "radar_modules" in section_ids
+    assert "valuation_scenarios" in section_ids
     assert "cash_flow" in section_ids
     assert "capital_safety" in section_ids
+    assert "share_basis" in section_ids
+    assert "valuation_formulas" in section_ids
     assert "shareholder_returns" in section_ids
     assert any(warning["code"] == "unconfirmed_annual_rows_excluded" for warning in snapshot["warnings"])
     assert snapshot["sections"][0]["id"] == "overview"

@@ -1474,9 +1474,9 @@ def build_valuation_history(data: Dict[str, pd.DataFrame], total_shares: Optiona
                         share_basis_used = "reported_shares"
                     else:
                         yr_shares = safe_float(year_data[col].get("shares"))
-                    if yr_shares and yr_shares > 0:
-                        shares_for_ps = yr_shares  # legacy fallback（A股/港股）
-                        share_basis_used = "legacy_shares"
+                        if yr_shares and yr_shares > 0:
+                            shares_for_ps = yr_shares  # legacy fallback（A股/港股）
+                            share_basis_used = "legacy_shares"
         snap = compute_buffett_munger_snapshot(
             col,
             year_data,

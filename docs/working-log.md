@@ -555,3 +555,271 @@ Problems:
 Next:
 
 - Plan Sprint 003 around provider-level annual provenance, share-capital diagnostics, or generation job UX.
+
+## 2026-05-06 18:06
+
+Task:
+
+- Used the frontend design skill to continue Sprint 002 display architecture and UI polish in GOAL style.
+
+Files Changed:
+
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+- `src/App.tsx`
+- `src/styles.css`
+- `src/App.test.tsx`
+
+Commands:
+
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Decisions:
+
+- Treat the report surface as a dense research workstation: clear report identity, generated reading index, side context, bounded tables, and subdued visual hierarchy.
+- Keep the new report index snapshot-driven so it does not imply unavailable sections.
+- Preserve the visually split title while adding an `aria-label` for stable accessible heading semantics.
+
+Problems:
+
+- Unit tests initially failed because the new report index intentionally duplicates section labels; assertions were updated to accept multiple visible labels.
+
+Next:
+
+- Use visual QA against the reference HTML before deciding whether `巴芒总览` should become snapshot-native.
+- Continue strict Sprint 002 closure with US-013 and US-014.
+
+## 2026-05-06 18:10
+
+Task:
+
+- Responded to user feedback that the UI polish hurt UX and charts exceeded browser width.
+
+Files Changed:
+
+- `src/styles.css`
+- `docs/progress.md`
+- `docs/working-log.md`
+
+Commands:
+
+- Playwright viewport overflow probe for 1280px, 390px, and 375px.
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Decisions:
+
+- Treat page-level horizontal scrolling as a hard UI failure.
+- Keep wide tables internally scrollable, but make charts responsive within their containers.
+- Add `minmax(0, 1fr)` / `min-width: 0` constraints around report grids so internal content cannot expand the whole page.
+
+Problems:
+
+- The previous polish pass relied on test/build success and missed real viewport overflow. The desktop report body was widened by grid min-content behavior, and mobile charts were widened by a 520px SVG minimum.
+
+Next:
+
+- Use the captured responsive screenshots and overflow measurement before further visual changes.
+
+## 2026-05-06 18:19
+
+Task:
+
+- Investigated and fixed user-reported data-quality issues around operating cash flow extraction and share-basis fallback labels.
+
+Files Changed:
+
+- `python/valuescope/legacy_stock_scripts/core/data_a.py`
+- `python/valuescope/legacy_stock_scripts/core/valuation.py`
+- `python/valuescope/legacy_stock_scripts/core/assessment.py`
+- `tests/python/test_cashflow_extras.py`
+- `tests/python/test_historical_share_basis.py`
+- `public/samples/company_report_snapshot.json`
+- `docs/report-snapshot-schema.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Commands:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Decisions:
+
+- OCF is sourced from annual cash-flow statement fields, not synthesized from earnings.
+- If net OCF is missing but annual operating inflow/outflow subtotals exist, derive OCF as inflow minus outflow and keep that behavior documented.
+- Do not call early-year profit/EPS-derived implied shares `legacy_shares`; disclose them separately as lower-confidence implied share counts.
+- Keep excluding 2025 until provider-level annual-report provenance can verify it as an annual report.
+
+Problems:
+
+- The old `fetch_cashflow_extras()` never emitted an `ocf` column, so `build_year_rows()` saw OCF as missing even though the source cash-flow statement had it.
+- `build_valuation_history()` overwrote `reported_shares` fallback labels with `legacy_shares` because of an indentation bug.
+- Existing raw cache lacked the new `ocf` column, so cache-hit generation needed migration logic.
+
+Next:
+
+- Continue US-013 by rendering the richer share-basis diagnostics directly in the React report.
+
+## 2026-05-06 18:25
+
+Task:
+
+- Compared the running ValueScope React report with the stock-scripts 000858 HTML report.
+
+Commands:
+
+- Playwright DOM extraction and screenshot capture for:
+  - `http://127.0.0.1:5173/#overview`
+  - `file:///Users/dingyitian/Desktop/stock-scripts/reports/pricing_power/2025_五 粮 液_000858_pricing_power.html`
+
+Artifacts:
+
+- `test-results/html-compare-valuescope-desktop.png`
+- `test-results/html-compare-reference-desktop.png`
+- `test-results/html-compare-valuescope-mobile.png`
+- `test-results/html-compare-reference-mobile.png`
+- `test-results/html-compare-report.json`
+
+Findings:
+
+- ValueScope covers the main report spine but is still much less dense: 20 H2 sections / 8 tables versus reference 37 H2 sections / 32 tables.
+- Remaining parity gaps include share-basis diagnostics, technical indicators, machine summary, detailed data-quality panel, valuation scenarios/resonance/formulas, and many radar-style quality/safety/shareholder modules.
+- Reference mobile page itself has horizontal overflow, while ValueScope does not at 390px.
+
+Next:
+
+- Prioritize US-013 share-basis diagnostics and US-014 structured data-quality consistency before adding technical indicators.
+
+## 2026-05-06 18:33
+
+Task:
+
+- Created Goal-Mode user story cards from the HTML parity comparison.
+
+Files Changed:
+
+- `docs/backlog.md`
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Decisions:
+
+- Track new parity gaps as backlog US-025 through US-031.
+- Prioritize share-basis diagnostics and structured data quality before visual density modules.
+- Add a parity QA gate story so future parity claims are measured by script and screenshots.
+- Keep fixed ValueScope data semantics even when the old reference HTML contains stale OCF/share-basis warnings.
+
+Next:
+
+- Implement US-025, then US-026.
+
+## 2026-05-06 18:52
+
+Task:
+
+- Implemented the Goal-Mode HTML parity story cards US-025 through US-031 after the user clarified that cards should be completed, not merely written.
+
+Files Changed:
+
+- `python/valuescope/report_snapshot.py`
+- `src/App.tsx`
+- `src/styles.css`
+- `src/reportSnapshot.test.ts`
+- `tests/python/test_report_snapshot.py`
+- `scripts/html_parity_check.mjs`
+- `package.json`
+- `public/samples/company_report_snapshot.json`
+- `docs/report-snapshot-schema.md`
+- `docs/backlog.md`
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+
+Commands:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+- `npm run test:parity`
+
+Decisions:
+
+- Upgrade the report snapshot schema to `0.3.0` for new parity sections.
+- Keep corrected OCF and share-basis semantics even when the reference HTML still shows stale warnings.
+- Treat Williams %R as price-position context only; do not frame it as a trading signal.
+- Use a repeatable parity script as the acceptance gate for required sections and mobile overflow.
+
+Results:
+
+- Added first-class runtime sections for data quality, machine summary, share basis, Williams %R technicals, valuation scenarios, valuation formulas, and focused radar modules.
+- Latest parity run reports ValueScope mobile overflow `false`; reference mobile overflow `true`; ValueScope table count `16` versus reference `32`.
+
+Next:
+
+- Sprint 003 should refine density and split radar modules further if needed, rather than treating these sections as missing.
+
+## 2026-05-06 21:50
+
+Task:
+
+- Implemented the user's detailed report-UX critique as goal-mode story cards US-032 through US-045.
+
+Files Changed:
+
+- `docs/backlog.md`
+- `docs/sprints/sprint-002.md`
+- `docs/progress.md`
+- `docs/agent-handoff.md`
+- `docs/working-log.md`
+- `python/valuescope/report_snapshot.py`
+- `python/valuescope/legacy_stock_scripts/core/orchestrator.py`
+- `src/App.tsx`
+- `src/styles.css`
+- `src/App.test.tsx`
+- `tests/e2e/report-workspace.spec.ts`
+- `public/samples/company_report_snapshot.json`
+
+Commands:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 30`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+- `npm run test:parity`
+- Playwright screenshot/overflow checks for desktop and mobile:
+  - `test-results/ux-corrections-desktop.png`
+  - `test-results/ux-corrections-mobile.png`
+
+Decisions:
+
+- Treat the left rail as the permanent report control and navigation home.
+- Keep macro interest-rate context in a separate appendix rather than blending it into the single-stock thesis flow.
+- Show unavailable multi-country yield curves as missing until real series exist.
+- Use colored metric cards and colored historical table cells as the default dense-report reading pattern.
+- Expand shareholder-return windows to the longest confirmed annual window so Buffett's one-dollar test has enough history.
+
+Problems:
+
+- Multi-country 10-year yield sources are not yet implemented, so only China uses real sample data and other countries are visibly marked unavailable.
+- The stock-scripts reference still has mobile overflow, so parity QA compares against it while keeping ValueScope's overflow gate stricter.
+
+Next:
+
+- If Sprint 003 continues macro context, add real country yield providers before adding more market-dashboard visuals.
+- If Sprint 003 continues report density, split `radar_modules` into more explicit first-class UI sections.

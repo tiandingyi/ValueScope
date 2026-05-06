@@ -2076,6 +2076,9 @@ def analyze_share_basis_coverage(
     cols = [c for c in (annual_cols or sorted(year_data.keys())) if c in year_data]
     valuation_years: List[str] = []
     fallback_years: List[str] = []
+    reported_fallback_years: List[str] = []
+    eps_derived_years: List[str] = []
+    legacy_fallback_years: List[str] = []
     missing_years: List[str] = []
     split_adjusted_years: List[str] = []
     split_like_jumps: List[str] = []
@@ -2092,12 +2095,17 @@ def analyze_share_basis_coverage(
         reported_shares = safe_float(row.get("reported_shares"))
         legacy_shares = safe_float(row.get("shares"))
         year_label = str(col)[:4]
+        reported_source = str(row.get("reported_shares_source") or "").strip()
         if valuation_shares is not None and valuation_shares > 0:
             valuation_years.append(year_label)
         elif reported_shares is not None and reported_shares > 0:
             fallback_years.append(year_label)
+            reported_fallback_years.append(year_label)
+            if reported_source == "profit_over_eps_derived":
+                eps_derived_years.append(year_label)
         elif legacy_shares is not None and legacy_shares > 0:
             fallback_years.append(year_label)
+            legacy_fallback_years.append(year_label)
         else:
             missing_years.append(year_label)
 
@@ -2154,6 +2162,12 @@ def analyze_share_basis_coverage(
         "coverage_ratio": coverage_ratio,
         "fallback_years": fallback_years,
         "fallback_count": len(fallback_years),
+        "reported_fallback_years": reported_fallback_years,
+        "reported_fallback_count": len(reported_fallback_years),
+        "eps_derived_years": eps_derived_years,
+        "eps_derived_count": len(eps_derived_years),
+        "legacy_fallback_years": legacy_fallback_years,
+        "legacy_fallback_count": len(legacy_fallback_years),
         "missing_years": missing_years,
         "missing_count": len(missing_years),
         "split_adjusted_years": split_adjusted_years,
@@ -2667,9 +2681,20 @@ def build_data_quality_report(
         warnings.append("当前股价缺失，每股估值与盈利率无法计算。")
     if shares is None:
         warnings.append("总股本缺失，每股指标无法计算。")
-    if share_basis.get("fallback_count"):
-        fallback_years = "、".join(share_basis.get("fallback_years") or [])
-        warnings.append(f"历史股本仍有 {share_basis['fallback_count']} 年回退到 legacy shares：{fallback_years}。")
+    if share_basis.get("legacy_fallback_count"):
+        fallback_years = "、".join(share_basis.get("legacy_fallback_years") or [])
+        warnings.append(f"历史股本仍有 {share_basis['legacy_fallback_count']} 年回退到 legacy shares：{fallback_years}。")
+    if share_basis.get("eps_derived_count"):
+        eps_years = "、".join(share_basis.get("eps_derived_years") or [])
+        warnings.append(f"历史股本有 {share_basis['eps_derived_count']} 年使用归母净利润/EPS推导的隐含股本：{eps_years}。")
+    reported_other_count = int(share_basis.get("reported_fallback_count") or 0) - int(share_basis.get("eps_derived_count") or 0)
+    if reported_other_count > 0:
+        reported_years = [
+            year
+            for year in (share_basis.get("reported_fallback_years") or [])
+            if year not in set(share_basis.get("eps_derived_years") or [])
+        ]
+        warnings.append(f"历史股本有 {reported_other_count} 年使用 reported_shares 回退：{'、'.join(reported_years)}。")
     if share_basis.get("missing_count"):
         missing_years = "、".join(share_basis.get("missing_years") or [])
         warnings.append(f"历史股本仍有 {share_basis['missing_count']} 年缺少 valuation_shares 与 legacy shares：{missing_years}。")
@@ -2871,4 +2896,3 @@ def build_dollar_retention_test(
         "price_start": price_start,
         "price_end": price_end,
     }
-

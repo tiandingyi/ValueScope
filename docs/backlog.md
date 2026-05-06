@@ -331,6 +331,373 @@ Notes:
 
 - Reference: `core/backtest.py`, `core/data_a.py:_filter_data_as_of_year`, and share-basis tests.
 
+## HTML Parity Gap Backlog
+
+These cards were created from the 2026-05-06 Playwright comparison between:
+
+- ValueScope: `http://127.0.0.1:5173/#overview`
+- Reference HTML: `/Users/dingyitian/Desktop/stock-scripts/reports/pricing_power/2025_五 粮 液_000858_pricing_power.html`
+
+Comparison artifacts:
+
+- `test-results/html-compare-report.json`
+- `test-results/html-compare-valuescope-desktop.png`
+- `test-results/html-compare-reference-desktop.png`
+- `test-results/html-compare-valuescope-mobile.png`
+- `test-results/html-compare-reference-mobile.png`
+
+Important note:
+
+- Do not copy reference HTML bugs back into ValueScope. The reference page still has stale `经营现金流 0/20` and `legacy shares` warnings; ValueScope has intentionally fixed those data-quality issues.
+
+Implementation update, 2026-05-06:
+
+- US-025 through US-031 were implemented for Sprint 002 goal-mode closure.
+- Runtime sections added: `data_quality`, `machine_summary`, `share_basis`, `technicals`, `valuation_scenarios`, `valuation_formulas`, and `radar_modules`.
+- `npm run test:parity` now verifies required parity sections and mobile overflow against the reference HTML.
+- Remaining future work is refinement depth, not absence of these parity surfaces: more granular submodules can be split from `radar_modules` in Sprint 003 if needed.
+
+## Goal-Mode UX Correction Backlog
+
+These cards were created from the 2026-05-06 live UI critique of `http://127.0.0.1:5173/#overview`.
+
+## US-032: Move and Restyle Report Controls
+
+As a report user,
+I want ticker/year controls placed in a calm workspace panel,
+so that the top navigation is not cluttered and the report header looks intentional.
+
+Acceptance Criteria:
+
+- Given the page loads, then ticker/year/generate controls are not squeezed into the top-right navbar.
+- Given desktop width, controls appear near the report context where they belong.
+- Given mobile width, controls wrap without horizontal overflow.
+- Given generation is loading, the button state remains visually clear.
+
+## US-033: Move Jump Directory into the Left Sidebar
+
+As a report reader,
+I want the section directory in the left sidebar,
+so that the central page is reserved for analysis content.
+
+Acceptance Criteria:
+
+- Given the report renders, then the middle jump-button strip is removed.
+- Given desktop width, the left rail includes clickable section links.
+- Given mobile width, the directory remains usable without page-level overflow.
+- Given Playwright clicks a sidebar link, then the target section becomes addressable by hash.
+
+## US-034: Reprioritize Single-Stock Report Sections
+
+As a value investor,
+I want company-specific valuation scenarios and operating quality before appendices,
+so that the report reads from business/valuation decisions to supporting diagnostics.
+
+Acceptance Criteria:
+
+- Given the report renders, then `valuation_scenarios` appears near valuation rather than near the end.
+- Given `data_quality` and `machine_summary` render, then they appear at the bottom as audit/appendix material.
+- Given macro yield context exists, it is not presented as the main single-stock valuation anchor.
+
+## US-035: Add Global 10-Year Yield Curve Context
+
+As a macro-aware investor,
+I want country 10-year yield curves in a separate context section,
+so that risk-free-rate context is visible without hijacking the single-stock report.
+
+Acceptance Criteria:
+
+- Given only China 10Y data is available, the section labels it explicitly and does not invent other countries.
+- Given the curve renders, then axes, min/max/current labels, and visible line contrast make high/low readable.
+- Given more countries become available later, the UI can show multiple country chips/series.
+
+## US-036: Make Metric Sections Scan as Colored Cards
+
+As a report reader,
+I want every major metric to be boxed with numeric value and status color,
+so that good/warning/bad/missing states are visible at a glance.
+
+Acceptance Criteria:
+
+- Applies to经营质量、提价权与运营效率、估值锚点、资本安全、股本口径、股东回报、数据质量等非-overview metric sections.
+- Green/yellow/red/gray backgrounds map to ok/warning/error/missing/not-applicable states.
+- Long metric explanations remain readable without overflowing.
+- PE/EPS percentile cards visibly change color according to percentile thresholds.
+
+## US-037: Make Buffett Overview Focus on Business Purity and OE
+
+As a Buffett/Munger-style reader,
+I want the overview to emphasize business purity and owner earnings,
+so that the first summary focuses on the right economic signal rather than gross margin alone.
+
+Acceptance Criteria:
+
+- Given quality metrics include业务纯度, the Buffett overview shows业务纯度 as a first-class card.
+- Given valuation metrics include `OE收益率 vs 国债`, the UI discloses the OE per share or OE amount used.
+- Given 毛利率 is present, it remains supporting context, not the main overview emphasis.
+
+## US-038: Replace Ambiguous Historical Trend Block
+
+As a report reader,
+I want historical trend visuals to explain what they measure,
+so that a tiny unlabeled line does not create confusion.
+
+Acceptance Criteria:
+
+- The old unclear left revenue mini-chart is removed or replaced by labeled multi-metric trend cards.
+- Any chart shown has explicit title, axis labels, and readable value labels.
+
+## US-039: Fix PE/EPS Chart Readability
+
+As a valuation reader,
+I want PE/EPS charts to show axes and reference values clearly,
+so that current and median lines are not clipped or unreadable.
+
+Acceptance Criteria:
+
+- Charts include x-axis and y-axis labels.
+- Current and median labels stay inside the chart viewport.
+- PE and EPS percentile panels visibly reflect warning/hot states.
+- Mobile viewport does not create page-level overflow.
+
+## US-040: Color Historical Tables by Trend and Quality
+
+As a report reader,
+I want historical rows and cells colored by business meaning,
+so that improving EPS/OE/OCF and deteriorating years stand out immediately.
+
+Acceptance Criteria:
+
+- EPS and OE per share decreases versus prior year are red; increases are green.
+- OCF/股 and OE/股 in share-basis history use green/red trend coloring.
+- Annual financial quality rows apply status color to key quality metrics.
+- Tables show the full available annual history by default, with internal scrolling only when needed.
+
+## US-041: Clarify Cash Flow Meaning and Remove Source Noise
+
+As a business-quality reader,
+I want cash-flow metrics explained in business terms,
+so that OCF, net income, capex, and capex/net income tell me what they imply.
+
+Acceptance Criteria:
+
+- Cash-flow cards explain what each metric means to the business.
+- `资本开支/净利` is colored by good/medium/bad thresholds.
+- The cash-flow table no longer displays `report_provenance`.
+
+## US-042: Improve Number Units Across the Report
+
+As a reader,
+I want large numbers converted into readable units,
+so that values like `3881608005.00` are not shown raw.
+
+Acceptance Criteria:
+
+- Share counts display as 亿股 where appropriate.
+- Money values display as 亿 or 万亿 where appropriate.
+- Repeated large-number formatting works in cards, details, and tables.
+
+## US-043: Add Capital Safety History and Missing Safety Signals
+
+As a financial-safety reader,
+I want capital safety to include historical ROIC and interest coverage,
+so that I can see leverage and capital efficiency rather than a static point-in-time card.
+
+Acceptance Criteria:
+
+- Capital safety shows historical rows where available.
+- ROIC and interest coverage appear when the generator can compute them.
+- Missing values are shown as missing, not zero.
+- Large share/mcap values use readable units.
+
+## US-044: Expand Shareholder Returns and Buffett One-Dollar Test
+
+As a Buffett-style reader,
+I want shareholder returns to explain one-dollar retained earnings,
+so that I can judge whether retained earnings created more than one dollar of market value.
+
+Acceptance Criteria:
+
+- Shareholder return rows use the longest confirmed annual window available.
+- The section includes one-dollar theory copy and ratio interpretation.
+- Good/bad retained-return states are color coded.
+
+## US-045: Verify UI Corrections with Browser QA
+
+As a developer,
+I want browser checks for the corrected report UX,
+so that layout regressions and sidebar navigation issues are caught.
+
+Acceptance Criteria:
+
+- Playwright verifies no mobile page-level overflow.
+- Playwright verifies sidebar navigation link behavior.
+- Playwright captures screenshots after the correction pass.
+
+## US-025: Render Share-Basis Diagnostics as a First-Class Report Section
+
+As a value investor,
+I want share-count basis, fallback source, and dilution risk shown in a dedicated section,
+so that per-share valuation history is not trusted blindly.
+
+Goal:
+
+- Close the reference gap for “股本口径来源与置信度”, “股本质量雷达”, and future unlock-pressure tables while preserving ValueScope's corrected share-basis semantics.
+
+Acceptance Criteria:
+
+- Given a snapshot has `diagnostics.share_capital`, when the report renders, then it shows a dedicated section titled `股本口径来源与置信度` or `股本诊断`.
+- Given yearly rows include `valuation_shares`, `asof_shares`, `reported_shares`, or `reported_shares_source`, when the section renders, then each source is labeled distinctly.
+- Given `reported_shares_source = "profit_over_eps_derived"`, when the section renders, then the UI labels it as implied share count, not `legacy_shares`.
+- Given future unlock data is missing, when the section renders, then it shows a stable “暂无可用解禁压力” state rather than hiding the area.
+- Given share-basis confidence is low or mixed, when the section renders, then the section tone is warning/fail and explains why.
+- Given the committed `000858` sample loads, then no text says early 1998-2008 rows are `legacy shares`.
+
+Notes:
+
+- Reference modules: `股本口径来源与置信度`, `股本质量雷达`, unlock-pressure table.
+- Related existing backlog: US-020.
+- Implementation source: `diagnostics.share_capital`, `analyze_share_basis_coverage`, valuation-history `share_basis_used`.
+
+## US-026: Render Structured Data Quality and Confidence Panel
+
+As a value investor,
+I want report confidence explained with coverage bars and model-availability status,
+so that I can distinguish reliable facts from incomplete analysis.
+
+Goal:
+
+- Close the reference gap for `数据质量与置信度` without reintroducing stale OCF or share-basis warnings.
+
+Acceptance Criteria:
+
+- Given `data_quality` exists, when the report renders, then it shows annual coverage, realtime data status, field completeness, industry adaptation, valuation model availability, and warning summary.
+- Given field completeness includes OCF, when the committed `000858` sample renders, then OCF coverage reflects the fixed `27/30` annual rows rather than `0/20`.
+- Given a warning is tied to a section, when the report renders, then it appears near the affected section and in the report-level data-quality panel.
+- Given a field is missing, when the panel renders, then the missing state is visible and stable enough for tests.
+- Given mobile viewport width is 390px, when the panel renders, then coverage bars and model chips do not create page-level horizontal overflow.
+
+Notes:
+
+- Reference module: `数据质量与置信度`.
+- Related existing backlog: US-021.
+- Implementation source: `build_data_quality_report`, snapshot `warnings`, section `warnings`.
+
+## US-027: Reproduce Williams %R Technical Indicator Module
+
+As a value investor,
+I want optional Williams %R technical context in the report,
+so that the new UI keeps the reference report's short-term price-position module without treating it as buy/sell advice.
+
+Goal:
+
+- Close the reference gap for `技术指标`, including Williams %R periods and crossing records.
+
+Acceptance Criteria:
+
+- Given price history exists, when the generator runs, then the snapshot includes Williams %R values for 14/28/60 day windows, a chart series, and crossing records.
+- Given technical data is present, when the UI renders, then it shows the three Williams %R period values, trend chart, and overbought/oversold crossing table.
+- Given technical data is unavailable or as-of mode makes it inappropriate, when the UI renders, then it shows a section-specific missing/not-applicable state.
+- Given the section renders, then it includes copy stating that Williams %R does not replace fundamental valuation and is not a trading signal.
+- Given mobile viewport width is 390px, then the chart and crossing table remain within the page width.
+
+Notes:
+
+- Reference module: `技术指标`.
+- Related existing backlog: US-023.
+- Implementation source: `core/technicals.py:build_williams_r`.
+
+## US-028: Reproduce Valuation Scenarios, Resonance, and Formula Appendix
+
+As a value investor,
+I want valuation scenarios, low-valuation resonance, and formulas visible,
+so that the report explains not just the output number but the model structure and sensitivity.
+
+Goal:
+
+- Close the reference gaps for `三档情景分析`, `低估共振结论`, and `估值公式`.
+
+Acceptance Criteria:
+
+- Given valuation details include scenario data, when the report renders, then it shows conservative/base/optimistic scenario rows with assumptions and result values.
+- Given multiple valuation models are available, when the report renders, then it shows a low-valuation resonance section explaining which models agree or disagree.
+- Given formulas are available, when the report renders, then it shows an appendix for OE-DCF, Munger forward valuation, CAGR/PEG/PEGY, SGR cross-check, and opportunity cost.
+- Given an input is missing or not applicable, when the section renders, then the affected formula/scenario is marked missing/not-applicable rather than silently omitted.
+- Given mobile viewport width is 390px, then scenario tables use internal scroll without page-level horizontal overflow.
+
+Notes:
+
+- Reference modules: `三档情景分析`, `低估共振结论`, `估值公式`.
+- Related existing backlog: US-014 and US-015.
+
+## US-029: Restore Detailed Operating, Safety, and Shareholder Radar Modules
+
+As a value investor,
+I want the report's quality and capital-return checks split into focused modules,
+so that I can scan why a company passes or fails instead of reading one compressed list.
+
+Goal:
+
+- Close the reference gap where ValueScope compresses many stock-scripts modules into broad sections.
+
+Acceptance Criteria:
+
+- Given annual rows and quality cards exist, when the report renders, then it shows separate modules for profitability, cash cycle, capital allocation, EPS quality, capital safety, net cash, goodwill, tax evidence, pledge, dividend health, shareholder return, and capital configuration where data exists.
+- Given a module has fewer than the required data points, when it renders, then it labels insufficient history.
+- Given a module is market-specific and not applicable, when it renders, then it labels `not_applicable` with reason.
+- Given module rows are table-like, when mobile viewport width is 390px, then tables remain internally scrollable without page-level overflow.
+- Given warnings exist for a module, when it renders, then warnings are shown near that module.
+
+Notes:
+
+- Reference modules include `盈利能力：产品的溢价护城河`, `产业链地位：现金效能`, `资本配置：扩张扩展性`, `EPS 透视`, `资本质量与财务安全`, `净现比雷达`, `商誉占比雷达`, `税务测谎雷达`, `股权质押雷达`, `分红健康度`, `股东回报雷达`, and `资本配置画像`.
+- Related existing backlog: US-016, US-017, US-018, US-019.
+
+## US-030: Add Machine Summary for AI Parsing
+
+As a research workflow user,
+I want a machine-readable report summary exposed in the UI and snapshot,
+so that AI or downstream tools can consume the report without scraping visual tables.
+
+Goal:
+
+- Close the reference gap for `机器摘要（AI解析）` while keeping the snapshot contract explicit.
+
+Acceptance Criteria:
+
+- Given a generated report snapshot, when a machine summary is available, then it includes normalized keys for company identity, data confidence, major verdicts, key warnings, valuation outputs, and missing/not-applicable states.
+- Given the UI renders the report, then it includes a `机器摘要（AI解析）` section that is readable by humans and stable for tests.
+- Given a value comes from AI or heuristic synthesis, when it appears in the summary, then the source/basis is disclosed and does not sound like final buy/sell advice.
+- Given the machine summary is missing, when the UI renders, then it shows a section-specific placeholder rather than failing.
+
+Notes:
+
+- Reference module: `机器摘要（AI解析）`.
+- This should be generated from snapshot facts, not by asking an LLM at render time.
+
+## US-031: Add HTML Parity QA Gate
+
+As a developer,
+I want a repeatable parity audit against the reference HTML,
+so that future UI work cannot claim parity while silently dropping sections or breaking mobile layout.
+
+Goal:
+
+- Turn the one-off Playwright comparison into a repeatable quality gate.
+
+Acceptance Criteria:
+
+- Given the ValueScope dev server and a reference HTML path, when the parity script runs, then it outputs JSON with section counts, table counts, chart counts, heading lists, keyword coverage, and mobile overflow measurements.
+- Given a reference feature is intentionally not implemented, when the script reports it missing, then the gap is mapped to a backlog story ID.
+- Given reference HTML contains a known bug fixed in ValueScope, when the report is generated, then it marks the difference as intentional rather than a parity failure.
+- Given mobile viewport width is 390px, then the script records `body.scrollWidth` for both pages and flags ValueScope if it exceeds viewport width.
+- Given screenshots are captured, then they are written under `test-results/` and referenced from the progress log.
+
+Notes:
+
+- Initial manual comparison artifacts are in `test-results/html-compare-report.json`.
+- This is a QA/developer-experience card, not a product-facing module.
+
 ## US-006: Define Screen Snapshot Schema v0
 
 As a developer,

@@ -332,6 +332,7 @@ def fetch_cashflow_extras(code, cf: Optional[pd.DataFrame] = None):
     empty = pd.DataFrame(
         columns=[
             "报告日",
+            "ocf",
             "capex",
             "dividends_paid",
             "div_reliable",
@@ -395,6 +396,26 @@ def fetch_cashflow_extras(code, cf: Optional[pd.DataFrame] = None):
 
     result = pd.DataFrame()
     result["报告日"] = annual["报告日"].values
+    ocf_col_candidates = [
+        "经营活动产生的现金流量净额",
+        "经营活动现金流量净额",
+        "经营活动现金净额",
+        "经营业务现金净额",
+        "经营活动产生的净现金",
+    ]
+    ocf_col = next((c for c in ocf_col_candidates if c in cf.columns), None)
+    if ocf_col is not None:
+        result["ocf"] = pd.to_numeric(annual[ocf_col], errors="coerce").values
+    else:
+        inflow_col = "经营活动现金流入小计" if "经营活动现金流入小计" in cf.columns else None
+        outflow_col = "经营活动现金流出小计" if "经营活动现金流出小计" in cf.columns else None
+        if inflow_col is not None and outflow_col is not None:
+            result["ocf"] = (
+                pd.to_numeric(annual[inflow_col], errors="coerce")
+                - pd.to_numeric(annual[outflow_col], errors="coerce")
+            ).values
+        else:
+            result["ocf"] = [None] * len(annual)
     if capex_col is not None:
         result["capex"] = pd.to_numeric(annual[capex_col], errors="coerce").values
     else:
@@ -1054,6 +1075,14 @@ def load_data(code: str) -> Dict[str, pd.DataFrame]:
         # year_data 从缓存重建（如果缺失）
         if "year_data" not in cached or not cached["year_data"]:
             cached["year_data"] = build_year_data_for_valuation(cached)
+        if (
+            "cashflow_extras" not in cached
+            or cached.get("cashflow_extras") is None
+            or getattr(cached.get("cashflow_extras"), "empty", True)
+            or "ocf" not in getattr(cached.get("cashflow_extras"), "columns", [])
+        ):
+            cached["cashflow_extras"] = fetch_cashflow_extras(code)
+            cached["year_data"] = build_year_data_for_valuation(cached)
         # 缓存命中时也重建 valuation_shares（巨潮股本数据独立缓存，成本低）
         _a_vs_map = _normalize_a_valuation_shares(code, cached["year_data"])
         for _col, _vs in _a_vs_map.items():
@@ -1065,6 +1094,10 @@ def load_data(code: str) -> Dict[str, pd.DataFrame]:
                 cached["year_data"][_col]["reported_shares_semantics"] = "period_end"
                 cached["year_data"][_col]["share_basis_confidence"] = "high"
         cached["current_price_tuple"] = get_current_price(code)
+        try:
+            save_cache(code, cached, market="a")
+        except Exception:
+            pass
         return cached
 
     abs_df = _stock_financial_abstract_cached(code).copy()
@@ -1444,7 +1477,10 @@ def build_year_data_for_valuation(data: Dict[str, pd.DataFrame]) -> Dict[str, Di
 
     out: Dict[str, Dict] = {}
     for c in annual_cols_from_abstract(abs_df):
+        cf_r = cf_map.get(c)
         ocf_v = safe_float(get_metric(abs_df, "经营现金流量净额", c))
+        if ocf_v is None and cf_r is not None and "ocf" in cf_r:
+            ocf_v = safe_float(cf_r["ocf"])
         profit_v = safe_float(get_metric(abs_df, "归母净利润", c))
         eps_v = safe_float(get_metric(abs_df, "基本每股收益", c))
         roe_v = safe_float(get_metric_first(abs_df, c, "净资产收益率(ROE)", "净资产收益率_平均"))
@@ -1452,7 +1488,6 @@ def build_year_data_for_valuation(data: Dict[str, pd.DataFrame]) -> Dict[str, Di
         if profit_v is None or eps_v is None or abs(profit_v) < 1e6 or abs(eps_v) < 1e-6:
             continue
         raw_shares = (profit_v / eps_v) if eps_v else None
-        cf_r = cf_map.get(c)
         bs_r = bs_map.get(c)
         inc_r = inc_map.get(c)
         out[c] = {
@@ -1847,4 +1882,3 @@ def fetch_restricted_release_queue_safe(code: str) -> Tuple[pd.DataFrame, str]:
         return df, "ok"
     except Exception:
         return pd.DataFrame(), "error"
-

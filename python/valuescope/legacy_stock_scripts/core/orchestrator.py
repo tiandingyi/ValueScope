@@ -538,14 +538,19 @@ def generate_report(code: str, years: int, asof_year: Optional[int] = None, asof
     pe_for_env = safe_float(valuation_details.get("pe_current"))
     market_env_data = None if asof_year is not None else build_market_env(pe_current=pe_for_env)
     data_quality = build_data_quality_report(rows, valuation_metrics, valuation_details, diagnostics, industry_text, is_bank=bank_flag)
-    dollar_retention = build_dollar_retention_test(
-        diagnostics.get("year_data") or {},
-        diagnostics.get("annual_cols") or [],
-        valuation_shares,
-        oe_yield_history,
-        rd_cap_ratio=rd_cap_ratio,
-        maint_capex_ratio=maint_capex_ratio,
-    )
+    dollar_retention = None
+    for retention_window in [max(years, 30), 20, 15, 12, 10]:
+        dollar_retention = build_dollar_retention_test(
+            diagnostics.get("year_data") or {},
+            diagnostics.get("annual_cols") or [],
+            valuation_shares,
+            oe_yield_history,
+            rd_cap_ratio=rd_cap_ratio,
+            maint_capex_ratio=maint_capex_ratio,
+            window_years=retention_window,
+        )
+        if dollar_retention is not None:
+            break
     t_analysis = time.perf_counter()
 
     out_dir = _dp.output_dir

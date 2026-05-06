@@ -7,9 +7,24 @@ describe("report snapshot schema", () => {
     const parsed = parseReportSnapshot(sample);
     expect(parsed.company.ticker).toBe("000858");
     expect(parsed.sections.map((section) => section.id)).toEqual(
-      expect.arrayContaining(["market_context", "valuation", "pe_percentile", "eps_percentile", "cash_flow", "capital_safety", "shareholder_returns"]),
+      expect.arrayContaining([
+        "data_quality",
+        "machine_summary",
+        "market_context",
+        "valuation",
+        "valuation_scenarios",
+        "pe_percentile",
+        "eps_percentile",
+        "radar_modules",
+        "cash_flow",
+        "capital_safety",
+        "share_basis",
+        "valuation_formulas",
+        "technicals",
+        "shareholder_returns",
+      ]),
     );
-    expect(parsed.schema_version).toBe("0.2.0");
+    expect(parsed.schema_version).toBe("0.3.0");
     expect(parsed.current_price).toEqual(expect.any(Number));
     expect(parsed.market_context).toBeTruthy();
     expect(parsed.pe_percentile).toBeTruthy();

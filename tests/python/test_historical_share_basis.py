@@ -180,6 +180,34 @@ class HistoricalShareBasisRegressionTests(unittest.TestCase):
         self.assertEqual(result[0]["base_oe_ps"], 10.0)
         self.assertEqual(result[0]["base_yield"], 100.0)
 
+    def test_valuation_history_keeps_reported_shares_basis_label(self):
+        data = self._make_history_data()
+        data["year_data"]["20161231"].pop("asof_shares")
+        data["year_data"]["20161231"].pop("valuation_shares")
+        data["year_data"]["20161231"]["reported_shares"] = 10.0
+        data["year_data"]["20161231"]["reported_shares_source"] = "profit_over_eps_derived"
+
+        def fake_snapshot(col, year_data, annual_cols, abs_df, discount_rate, terminal_growth, projection_years, shares_for_ps=None, **kwargs):
+            return {
+                "avg_oe_ps": 1.0,
+                "g_bm": 0.1,
+                "buf_total": 1.0,
+                "raw_buf_total": 1.0,
+                "buf_dcf": 1.0,
+                "nc_iv": 0.0,
+                "munger": {15: 1.0, 20: 1.0, 25: 1.0},
+                "raw_munger": {15: 1.0, 20: 1.0, 25: 1.0},
+                "diag_dcf": {},
+                "diag_munger": {},
+                "payout": 0.0,
+            }
+
+        with patch("valuescope.legacy_stock_scripts.core.valuation.compute_buffett_munger_snapshot", side_effect=fake_snapshot):
+            rows = build_valuation_history(data, total_shares=None, history_years=2)
+
+        row_2016 = next(row for row in rows if row["year"] == "2016")
+        self.assertEqual(row_2016["share_basis_used"], "reported_shares")
+
 
 if __name__ == "__main__":
     unittest.main()

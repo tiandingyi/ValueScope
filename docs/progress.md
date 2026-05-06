@@ -26,6 +26,242 @@ Notes:
 
 ## 2026-05-06
 
+### Goal-Mode UX Correction Story Implementation
+
+Status: Done
+
+Changed:
+
+- Created and completed the user-feedback correction cards US-032 through US-045 in goal mode.
+- Moved stock-code, year, and generate controls out of the top-right nav and into the left rail.
+- Moved report jump navigation into the left rail and removed the central jump-button strip.
+- Reordered the report so valuation scenarios and operating/valuation substance appear earlier, while data quality and machine summary move to the end as appendices.
+- Changed `巴芒总览` to emphasize `业务纯度` and disclose the OE per-share basis used by `OE收益率 vs 国债`.
+- Replaced the ambiguous left-side history sparkline with labeled latest-year business signal cards.
+- Improved PE/EPS charts with axes, y labels, and unclipped current/median labels.
+- Converted major metric sections into colored value cards and added trend/threshold colors to historical tables.
+- Clarified cash-flow business meaning, removed visible annual-report source noise from the cash-flow table, and color-coded capex/net-income intensity.
+- Added capital-safety history rows for ROIC, interest coverage, OCF/NI, EPS quality, goodwill ratio, payout, and total yield.
+- Expanded shareholder-return history to the longest confirmed annual window and added Buffett's one-dollar retained-earnings test.
+- Added a separate global 10-year yield-curve appendix without inventing unavailable country data.
+- Regenerated the `000858` sample with 30 years of confirmed annual history where available.
+
+Verified:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 30`
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+- `npm run test:parity`
+- Browser screenshots:
+  - `test-results/ux-corrections-desktop.png`
+  - `test-results/ux-corrections-mobile.png`
+- Latest parity result: ValueScope mobile overflow `false`; reference mobile overflow `true`; ValueScope table count `17`.
+
+Next:
+
+- Sprint 003 should refine real multi-country 10-year yield sources and decide whether radar modules deserve separate first-class sections.
+
+Notes:
+
+- The macro yield section is now framed as context appendix only, not as a single-stock financial-report conclusion.
+- Missing country yield series are explicitly marked unavailable; no placeholder curves are fabricated.
+
+### Goal-Mode HTML Parity Story Implementation
+
+Status: Done
+
+Changed:
+
+- Implemented the goal-mode parity cards created from the HTML comparison:
+  - US-025: `share_basis` snapshot section and React `股本口径诊断` UI.
+  - US-026: `data_quality` section with coverage bars, model chips, and share-basis confidence summary.
+  - US-027: Williams %R technicals with 14/28/60 day values, chart rows, and crossing-event table.
+  - US-028: valuation scenario matrix, low-valuation resonance details, and formula appendix.
+  - US-029: focused radar module table splitting operating, valuation, share-capital, and shareholder-return signals.
+  - US-030: machine-readable summary section with research-only guardrail.
+  - US-031: repeatable Playwright parity QA script and `npm run test:parity`.
+- Upgraded `company_report_snapshot.json` to schema `0.3.0`.
+- Regenerated `public/samples/company_report_snapshot.json`.
+
+Verified:
+
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+- `npm run test:parity`
+- Latest parity result: ValueScope mobile overflow `false`; reference mobile overflow `true`; ValueScope now renders 16 tables and the required parity sections.
+
+Next:
+
+- Sprint 003 can focus on deeper visual density and market-generalization work rather than the strict Sprint 002 HTML parity gaps.
+
+Notes:
+
+- The reference HTML still has stale OCF/share-basis warnings; ValueScope keeps the corrected OCF extraction and EPS-derived share-basis semantics.
+- Technical indicators are explicitly framed as price-position context, not buy/sell advice.
+
+### Goal-Mode HTML Parity Story Cards
+
+Status: Done
+
+Changed:
+
+- Added HTML parity gap story cards to `docs/backlog.md`:
+  - US-025: share-basis diagnostics as first-class report section
+  - US-026: structured data quality and confidence panel
+  - US-027: Williams %R technical indicator module
+  - US-028: valuation scenarios, resonance, and formula appendix
+  - US-029: detailed operating, safety, and shareholder radar modules
+  - US-030: machine summary for AI parsing
+  - US-031: repeatable HTML parity QA gate
+- Updated `docs/sprints/sprint-002.md` with a parity gap card summary, priority order, and guardrail not to copy known reference bugs back into ValueScope.
+
+Verified:
+
+- Cross-checked story cards against `test-results/html-compare-report.json`.
+- Confirmed cards map the missing comparison buckets: share basis, data quality, technicals, machine summary, valuation depth, and detailed radar modules.
+
+Next:
+
+- Implement US-025 and US-026 first.
+
+Notes:
+
+- This was documentation/story-card work only; no runtime code changed in this step.
+
+### 000858 HTML Parity Comparison
+
+Status: Done
+
+Changed:
+
+- Compared the running ValueScope page against the stock-scripts 000858 pricing-power HTML report with Playwright.
+- Captured desktop and mobile screenshots for both pages.
+- Generated a structured DOM comparison report.
+
+Verified:
+
+- ValueScope: `http://127.0.0.1:5173/#overview`
+- Reference: `file:///Users/dingyitian/Desktop/stock-scripts/reports/pricing_power/2025_五 粮 液_000858_pricing_power.html`
+- Artifacts:
+  - `test-results/html-compare-valuescope-desktop.png`
+  - `test-results/html-compare-reference-desktop.png`
+  - `test-results/html-compare-valuescope-mobile.png`
+  - `test-results/html-compare-reference-mobile.png`
+  - `test-results/html-compare-report.json`
+
+Next:
+
+- Close remaining parity gaps in this order: share-basis diagnostics, structured data-quality panel, technical indicators, richer valuation scenario/resonance/formula sections, and the detailed radar/SES modules.
+
+Notes:
+
+- ValueScope has no page-level mobile horizontal overflow at 390px; the reference HTML still overflows (`body.scrollWidth = 893` at a 390px viewport).
+- Reference HTML was generated before the OCF/share-basis fixes and still contains the old `经营现金流 0/20` and `legacy shares` warnings; do not reintroduce those bugs for parity.
+
+### Cash Flow and Share-Basis Data Quality Fix
+
+Status: Done
+
+Changed:
+
+- Fixed A-share cash-flow extraction in `fetch_cashflow_extras()` so `ocf` is populated from the annual cash-flow statement field `经营活动产生的现金流量净额`.
+- Added a fallback for cash-flow statements that lack the net OCF field but include annual operating cash inflow and outflow subtotals.
+- Rebuilt cached `year_data` when old raw cache lacks the new `ocf` column.
+- Fixed valuation history share-basis labeling so `reported_shares` is not overwritten as `legacy_shares`.
+- Improved share-basis diagnostics to distinguish:
+  - verified `valuation_shares`
+  - `reported_shares`
+  - `profit_over_eps_derived` implied shares
+  - true `legacy_shares`
+- Regenerated `public/samples/company_report_snapshot.json`.
+- Updated `docs/report-snapshot-schema.md` with OCF and share-basis fallback rules.
+
+Verified:
+
+- `PYTHONPATH=python python3 -m valuescope.cli 000858 --years 10`
+- Sample OCF coverage is now `27/30` annual rows.
+- Sample no longer contains a `legacy shares` warning.
+- Sample still excludes 2025 because it lacks verifiable annual-report provenance.
+- `PYTHONPATH=python python3 -m pytest tests/python -q`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Next:
+
+- If 2025 should be included later, add provider-level annual-report provenance instead of bypassing the conservative exclusion rule.
+
+Notes:
+
+- OCF must remain cash-flow-statement based. It must not be substituted with net income or another earnings proxy.
+- 1998-2008 share counts remain lower-confidence implied shares because the available CNInfo share-change series starts later for the sample.
+
+### Sprint 002 UI Architecture and Story Card Polish
+
+Status: Done
+
+Changed:
+
+- Used the frontend design workflow to restate the report UI as a calm, dense research workstation instead of a marketing page.
+- Added Goal-Mode Sprint 002 story cards for US-006 through US-017 in `docs/sprints/sprint-002.md`.
+- Refined `src/App.tsx` report architecture with:
+  - a clearer report cover split between identity copy and inspectable metadata
+  - explicit currency/accounting unit visibility in the cover and side rail
+  - a sticky report reading index generated from available sections
+  - richer section status metadata for rows, missing values, and warnings
+  - stable accessible heading semantics after visual title restructuring
+- Refined `src/styles.css` with a calmer workspace palette, tighter section rhythm, table max-height scrolling, mobile form/layout fixes, and explicit Buffett overview styling.
+- Fixed valuation badge color mapping from snapshot values (`green`/`yellow`/`red`) to UI tone classes.
+- Updated `src/App.test.tsx` to allow duplicated section labels from the new report index.
+
+Verified:
+
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Next:
+
+- Visually inspect the running page at the local Vite URL and continue with US-013/US-014 implementation if Sprint 002 strict closure remains the immediate priority.
+
+Notes:
+
+- No database dependency or investment-advice language was introduced.
+- The UI remains snapshot-driven; the new report index only reflects sections already present in the loaded snapshot.
+
+### UI Overflow Fix After Browser QA
+
+Status: Done
+
+Changed:
+
+- Re-ran real-browser overflow checks after user feedback that charts exceeded the browser width.
+- Fixed `src/styles.css` grid min-width behavior so dense sections and chart grids cannot force page-level horizontal scrolling.
+- Changed line charts to scale inside their containers instead of requiring horizontal chart scrolling.
+- Kept wide data tables inside bounded internal scroll containers.
+
+Verified:
+
+- Playwright viewport measurement:
+  - 1280px: `body.scrollWidth = 1280`
+  - 390px: `body.scrollWidth = 390`
+  - 375px: `body.scrollWidth = 375`
+- Screenshots captured:
+  - `test-results/ui-responsive-1280.png`
+  - `test-results/ui-responsive-390.png`
+  - `test-results/ui-responsive-375.png`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+
+Next:
+
+- Continue visual QA by reviewing actual screenshots, not only DOM assertions, before calling future UI polish done.
+
 ### Sprint 002 Parity Closure Implementation Pass
 
 Status: In Progress

@@ -10,8 +10,9 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from valuescope.legacy_stock_scripts.core import orchestrator
+from valuescope.legacy_stock_scripts.core.assessment import build_quality_year_snapshots
 
-SCHEMA_VERSION = "0.2.0"
+SCHEMA_VERSION = "0.3.0"
 DEFAULT_OUTPUT_DIR = Path("data/report_snapshots")
 ALL_ANNUAL_HISTORY_YEARS = 80
 
@@ -109,6 +110,7 @@ def _snapshot_from_render_payload(
     market_context = _market_context(kwargs.get("market_env_data"))
     pe_percentile = _percentile_context((valuation_details or {}).get("pe_percentile_history"), "pe")
     eps_percentile = _percentile_context((valuation_details or {}).get("eps_percentile_history"), "eps")
+    wr_data = _williams_r_context(kwargs.get("wr_data"))
 
     coverage_years = [str(row.get("year")) for row in rows if row.get("year") is not None]
     company_market = "CN-A"
@@ -118,21 +120,34 @@ def _snapshot_from_render_payload(
         company_market = "US"
 
     warnings = _warnings_from_quality(data_quality) + annual_warnings
+    quality_snapshots = build_quality_year_snapshots(
+        diagnostics.get("abs_df") if isinstance(diagnostics, dict) else None,
+        diagnostics.get("annual_cols") if isinstance(diagnostics, dict) else [],
+        diagnostics.get("year_data") if isinstance(diagnostics, dict) else {},
+        diagnostics.get("market_cap") if isinstance(diagnostics, dict) else None,
+    )
     sections = [
         _overview_section(conclusions, data_quality),
-        _market_context_section(market_context),
         _metric_section("quality", "Quality", metrics),
         _metric_section("pricing_power", "Pricing Power", ses_metrics),
+        _radar_modules_section(metrics, ses_metrics, valuation_metrics, diagnostics, dollar_retention),
         _metric_section("valuation", "Valuation", valuation_metrics),
+        _valuation_scenarios_section(valuation_details),
         _percentile_section("pe_percentile", "PE Percentile", pe_percentile),
         _percentile_section("eps_percentile", "EPS Percentile", eps_percentile),
         _cash_flow_section(rows),
-        _capital_safety_section(diagnostics),
+        _capital_safety_section(diagnostics, quality_snapshots, rows),
+        _share_basis_section(diagnostics, data_quality, rows),
         _shareholder_returns_section(dollar_retention),
         _table_section("annual_rows", "Annual Rows", rows),
         _table_section("valuation_history", "Valuation History", valuation_history),
-        _diagnostics_section(diagnostics),
         _table_section("owner_earnings_yield", "Owner Earnings Yield", oe_yield_history),
+        _technicals_section(wr_data),
+        _market_context_section(market_context),
+        _data_quality_section(data_quality, warnings),
+        _machine_summary_section(ticker, company_name, rows, data_quality, warnings, valuation_metrics),
+        _valuation_formulas_section(valuation_metrics),
+        _diagnostics_section(diagnostics),
         _raw_section("dollar_retention", "Dollar Retention", dollar_retention),
         _metric_explanations_section(metrics, ses_metrics, valuation_metrics),
     ]
@@ -369,6 +384,79 @@ def _overview_section(conclusions: Any, data_quality: Any) -> Dict[str, Any]:
     }
 
 
+def _data_quality_section(data_quality: Any, warnings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    clean = _jsonable(data_quality) if isinstance(data_quality, dict) else {}
+    field_stats = clean.get("field_stats") if isinstance(clean, dict) else []
+    model_results = clean.get("model_results") if isinstance(clean, dict) else []
+    items = [
+        _display_item("confidence", "整体置信度", clean.get("confidence"), "由字段覆盖、估值模型可用性、股本口径和缺失警告共同给出。"),
+        _display_item("n_years", "历史样本", clean.get("n_years"), "进入快照的年度历史样本数量。", unit="number"),
+        _display_item("models_available", "可用模型", clean.get("n_models_available"), "当前快照中可计算的估值模型数量。", unit="number"),
+        _display_item("model_coverage", "模型覆盖", _safe_percent(clean.get("n_models_available"), clean.get("n_models_total")), "可用估值模型 / 总估值模型。", unit="percent"),
+    ]
+    return {
+        "id": "data_quality",
+        "title": "Data Quality",
+        "summary": "把字段覆盖、模型可用性、股本口径和排除年度拆成可核查状态，避免把数据问题藏在总览警告里。",
+        "items": items,
+        "details": {
+            "confidence": clean.get("confidence"),
+            "confidence_score": clean.get("confidence_score"),
+            "year_range": clean.get("year_range"),
+            "industry_matched": clean.get("industry_matched"),
+            "discount_key": clean.get("discount_key"),
+            "exit_pe_key": clean.get("exit_pe_key"),
+            "share_basis": clean.get("share_basis"),
+            "model_results": model_results,
+        },
+        "rows": field_stats or [],
+        "warnings": warnings,
+    }
+
+
+def _machine_summary_section(
+    ticker: str,
+    company_name: Any,
+    rows: List[Dict[str, Any]],
+    data_quality: Any,
+    warnings: List[Dict[str, Any]],
+    valuation_metrics: Any,
+) -> Dict[str, Any]:
+    latest = _latest_annual_row(rows) or {}
+    quality = _jsonable(data_quality) if isinstance(data_quality, dict) else {}
+    valuation_items = [_assessment_to_item(item) for item in valuation_metrics or []]
+    warning_labels = [item.get("label") for item in valuation_items if item.get("status") in {"warning", "error", "missing"}]
+    summary = {
+        "ticker": str(ticker),
+        "company_name": str(company_name),
+        "latest_annual_year": latest.get("year"),
+        "confidence": quality.get("confidence"),
+        "warning_count": len(warnings),
+        "valuation_warning_labels": warning_labels,
+        "research_only": True,
+        "advice_policy": "研究辅助，不构成买入、卖出或持有建议。",
+    }
+    rows_out = [
+        {"key": "ticker", "value": summary["ticker"], "basis": "报告快照 company.ticker"},
+        {"key": "latest_annual_year", "value": summary["latest_annual_year"], "basis": "已确认年度历史的最后一年"},
+        {"key": "confidence", "value": summary["confidence"], "basis": "数据质量综合评分"},
+        {"key": "warning_count", "value": summary["warning_count"], "basis": "顶层警告数量"},
+        {"key": "research_only", "value": "true", "basis": summary["advice_policy"]},
+    ]
+    return {
+        "id": "machine_summary",
+        "title": "Machine Summary",
+        "summary": "面向后续自动解析的低噪声摘要；只表达数据事实和研究辅助状态，不输出买卖建议。",
+        "items": [
+            _display_item("latest_annual_year", "最新年报", latest.get("year"), "已确认年度历史的最后一年。"),
+            _display_item("warning_count", "警告数量", len(warnings), "快照顶层数据警告数量。", unit="number"),
+        ],
+        "details": summary,
+        "rows": rows_out,
+        "warnings": warnings,
+    }
+
+
 def _table_section(section_id: str, title: str, rows: Any) -> Dict[str, Any]:
     return {
         "id": section_id,
@@ -453,6 +541,7 @@ def _cash_flow_section(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             latest.get("capex_net_income"),
             "资本开支占净利润比例，用来观察维护性资本开支压力。",
             unit="percent",
+            status=_capex_intensity_status(latest.get("capex_net_income")),
         ),
     ]
     table_rows = [
@@ -476,7 +565,18 @@ def _cash_flow_section(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _capital_safety_section(diagnostics: Any) -> Dict[str, Any]:
+def _capex_intensity_status(value: Any) -> str:
+    number = _safe_float(value)
+    if number is None:
+        return "missing"
+    if number <= 25:
+        return "ok"
+    if number <= 60:
+        return "warning"
+    return "error"
+
+
+def _capital_safety_section(diagnostics: Any, quality_snapshots: Any = None, annual_rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     if not isinstance(diagnostics, dict):
         return _raw_section("capital_safety", "Capital Safety", diagnostics)
     share_capital = diagnostics.get("share_capital")
@@ -494,7 +594,76 @@ def _capital_safety_section(diagnostics: Any) -> Dict[str, Any]:
         "summary": "资本安全先披露价格、市值、股本口径和稀释/回购真实性，不输出投资建议。",
         "items": items,
         "details": _jsonable(selected),
+        "rows": _jsonable(_capital_safety_rows(quality_snapshots, annual_rows or [])),
         "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _capital_safety_rows(quality_snapshots: Any, annual_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    annual_years = {str(row.get("year")) for row in annual_rows}
+    rows = []
+    for row in _jsonable(quality_snapshots or []):
+        if not isinstance(row, dict):
+            continue
+        if annual_years and str(row.get("year")) not in annual_years:
+            continue
+        rows.append({
+            "year": row.get("year"),
+            "roic": row.get("roic"),
+            "interest_coverage": row.get("icr"),
+            "interest_tag": row.get("icr_tag"),
+            "ocf_ratio": row.get("ocf_ratio"),
+            "eps_quality": row.get("eps_quality"),
+            "goodwill_ratio": row.get("gw_pct"),
+            "payout": row.get("payout"),
+            "total_yield": row.get("total_yield"),
+        })
+    return sorted(rows, key=lambda item: str(item.get("year") or ""))
+
+
+def _share_basis_section(diagnostics: Any, data_quality: Any, annual_rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(diagnostics, dict):
+        return None
+    share_capital = diagnostics.get("share_capital")
+    if not isinstance(share_capital, dict):
+        return None
+    annual_years = {str(row.get("year")) for row in annual_rows}
+    rows = [
+        row
+        for row in _jsonable(share_capital.get("rows") or [])
+        if isinstance(row, dict) and str(row.get("year")) in annual_years
+    ]
+    cards = share_capital.get("cards") or []
+    items = [_assessment_to_item(card) for card in cards]
+    clean_quality = _jsonable(data_quality) if isinstance(data_quality, dict) else {}
+    share_basis = clean_quality.get("share_basis") if isinstance(clean_quality, dict) else {}
+    details = {
+        "price": diagnostics.get("price"),
+        "market_cap": diagnostics.get("market_cap"),
+        "shares": diagnostics.get("shares"),
+        "confidence": share_basis.get("confidence") if isinstance(share_basis, dict) else None,
+        "coverage_ratio": share_basis.get("coverage_ratio") if isinstance(share_basis, dict) else None,
+        "valuation_count": share_basis.get("valuation_count") if isinstance(share_basis, dict) else None,
+        "eps_derived_years": share_basis.get("eps_derived_years") if isinstance(share_basis, dict) else [],
+        "legacy_fallback_years": share_basis.get("legacy_fallback_years") if isinstance(share_basis, dict) else [],
+        "reported_semantics": share_basis.get("reported_semantics") if isinstance(share_basis, dict) else [],
+        "source_policy": "优先财报披露股本；缺失时可记录 EPS 推导隐含股本；legacy shares 只能作为最后回退并必须警告。",
+    }
+    warnings = [item for item in items if item.get("status") in {"missing", "warning", "error"}]
+    if isinstance(share_basis, dict) and share_basis.get("eps_derived_count"):
+        warnings.append({
+            "code": "eps_derived_share_basis",
+            "message": f"历史股本有 {share_basis.get('eps_derived_count')} 年使用归母净利润/EPS推导的隐含股本。",
+            "severity": "warning",
+        })
+    return {
+        "id": "share_basis",
+        "title": "Share Basis Diagnostics",
+        "summary": "单独披露估值使用的股本来源、推导年份和稀释/回购判断，避免把股本口径误读成 legacy 回退。",
+        "items": items,
+        "details": _jsonable(details),
+        "rows": rows,
+        "warnings": warnings,
     }
 
 
@@ -507,15 +676,222 @@ def _shareholder_returns_section(dollar_retention: Any) -> Optional[Dict[str, An
         _display_item("retained_oe", "留存所有者收益", dollar_retention.get("retained_oe"), "累计所有者收益扣除分红和回购后的留存部分。", unit="money"),
         _display_item("ratio_oe", "OE留存回报", dollar_retention.get("ratio_oe"), "市值增加额相对留存所有者收益的倍数。", unit="multiple"),
     ]
+    rows = _jsonable(dollar_retention.get("rows") or [])
+    enriched_rows = []
+    cumulative_retained = 0.0
+    cumulative_mva = None
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        enriched = dict(row)
+        retained = (float(row.get("oe") or 0) - float(row.get("div") or 0) - float(row.get("buyback") or 0))
+        cumulative_retained += retained
+        if isinstance(dollar_retention.get("mcap_start"), (int, float)) and isinstance(row.get("price_ma200"), (int, float)) and isinstance(dollar_retention.get("shares_yi"), (int, float)):
+            current_mcap = row["price_ma200"] * dollar_retention["shares_yi"]
+            cumulative_mva = current_mcap - dollar_retention["mcap_start"]
+        enriched["retained_oe"] = retained
+        enriched["one_dollar_return"] = _safe_divide(cumulative_mva, cumulative_retained) if cumulative_mva is not None else None
+        enriched_rows.append(enriched)
     return {
         "id": "shareholder_returns",
         "title": "Shareholder Returns",
-        "summary": "股东回报章节按已确认年报窗口重算，避免把未确认年度混入留存收益检验。",
+        "summary": "股东回报按已确认年报窗口重算，并用巴菲特“一美元留存收益至少创造一美元市值”的口径观察管理层资本配置。",
         "items": items,
-        "rows": _jsonable(dollar_retention.get("rows") or []),
+        "rows": enriched_rows,
         "details": _jsonable({key: value for key, value in dollar_retention.items() if key != "rows"}),
         "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
     }
+
+
+def _valuation_formulas_section(valuation_metrics: Any) -> Dict[str, Any]:
+    rows = []
+    for item in [_assessment_to_item(metric) for metric in valuation_metrics or []]:
+        rows.append({
+            "model": item.get("label"),
+            "value": item.get("value"),
+            "formula": item.get("basis"),
+            "direction": "contextual",
+            "meaning": item.get("what_it_measures") or item.get("meaning"),
+            "caveat": item.get("implication"),
+            "status": item.get("status"),
+        })
+    return {
+        "id": "valuation_formulas",
+        "title": "Valuation Formulas",
+        "summary": "把估值公式、方向和限制条件独立成表，便于和原 HTML 的公式附录核对。",
+        "items": [],
+        "rows": rows,
+        "warnings": [row for row in rows if row.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _valuation_scenarios_section(valuation_details: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(valuation_details, dict):
+        return None
+    scenarios = valuation_details.get("scenario_analysis")
+    if not isinstance(scenarios, dict):
+        return None
+    dcf_iv = scenarios.get("dcf_iv") or {}
+    munger_tables = scenarios.get("munger_tables") or {}
+    rows = []
+    for oe_label, oe_value in scenarios.get("oe_levels") or []:
+        for g_label, g_value in scenarios.get("g_levels") or []:
+            key = (oe_label, g_label)
+            row = {
+                "owner_earnings_case": oe_label,
+                "owner_earnings_ps": oe_value,
+                "growth_case": g_label,
+                "growth": _safe_percent(g_value, 1),
+                "dcf_iv": dcf_iv.get(key),
+            }
+            for exit_pe in scenarios.get("exit_pes") or []:
+                table = munger_tables.get(exit_pe) or {}
+                row[f"munger_{exit_pe}x"] = table.get(key)
+            rows.append(row)
+    resonances = valuation_details.get("resonances") or []
+    sensitivity = valuation_details.get("dcf_sensitivity") if isinstance(valuation_details.get("dcf_sensitivity"), dict) else {}
+    items = [
+        _display_item("resonance_count", "共振信号", len(resonances), "多个估值模型同时支持或反对低估判断的数量。", unit="number"),
+        _display_item("mos_ratio", "安全边际", _safe_percent(valuation_details.get("mos_ratio"), 1), "估值模型采用的安全边际比例。", unit="percent"),
+        _display_item("discount_rate", "折现率", _safe_percent(valuation_details.get("discount_rate"), 1), "行业适配后的折现率。", unit="percent"),
+    ]
+    return {
+        "id": "valuation_scenarios",
+        "title": "Valuation Scenarios",
+        "summary": "三档所有者收益、增长率与退出市盈率组合，配合低估共振和 DCF 敏感性复核估值结构。",
+        "items": items,
+        "details": _jsonable({
+            "resonances": resonances,
+            "dcf_sensitivity": sensitivity,
+            "exit_pes": valuation_details.get("exit_pes"),
+            "mos_grade": valuation_details.get("mos_grade"),
+            "discount_rate_key": valuation_details.get("discount_rate_key"),
+            "exit_pe_key": valuation_details.get("exit_pe_key"),
+        }),
+        "rows": _jsonable(rows),
+        "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _radar_modules_section(
+    metrics: Any,
+    ses_metrics: Any,
+    valuation_metrics: Any,
+    diagnostics: Any,
+    dollar_retention: Any,
+) -> Dict[str, Any]:
+    rows = []
+
+    def add_row(module: str, source: str, item: Dict[str, Any]) -> None:
+        rows.append({
+            "module": module,
+            "signal": item.get("label"),
+            "value": item.get("value"),
+            "status": item.get("status"),
+            "basis": item.get("basis"),
+            "source": source,
+            "warning": item.get("warning"),
+        })
+
+    for item in [_assessment_to_item(value) for value in metrics or []]:
+        label = str(item.get("label") or "")
+        if any(token in label for token in ["毛利", "纯度", "现金", "资本", "ROE", "EPS", "税", "商誉", "净现"]):
+            add_row("经营质量雷达", "quality", item)
+    for item in [_assessment_to_item(value) for value in ses_metrics or []]:
+        label = str(item.get("label") or "")
+        if any(token in label for token in ["营收", "毛利", "费用", "周转", "ROE", "现金"]):
+            add_row("提价权与效率雷达", "pricing_power", item)
+    for item in [_assessment_to_item(value) for value in valuation_metrics or []]:
+        add_row("估值雷达", "valuation", item)
+    if isinstance(diagnostics, dict) and isinstance(diagnostics.get("share_capital"), dict):
+        for card in diagnostics["share_capital"].get("cards") or []:
+            add_row("股本质量雷达", "share_capital", _assessment_to_item(card))
+    if isinstance(dollar_retention, dict):
+        ratio = dollar_retention.get("ratio_oe")
+        status = "ok" if isinstance(ratio, (int, float)) and ratio >= 1 else "warning"
+        rows.append({
+            "module": "股东回报雷达",
+            "signal": "OE留存回报",
+            "value": ratio,
+            "status": status,
+            "basis": "市值增加额 / 留存所有者收益。",
+            "source": "dollar_retention",
+            "warning": None if status == "ok" else "留存收益未被市值充分确认。",
+        })
+    return {
+        "id": "radar_modules",
+        "title": "Focused Radar Modules",
+        "summary": "把经营、估值、股本和股东回报信号拆成可扫描模块，减少宽泛章节里的信息压缩。",
+        "items": [],
+        "rows": rows,
+        "warnings": [row for row in rows if row.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _williams_r_context(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+    clean = _jsonable(value)
+    if not isinstance(clean, dict):
+        return None
+    periods = [int(period) for period in clean.get("periods") or []]
+    dates = clean.get("dates") or []
+    wr = clean.get("wr") or {}
+    rows = []
+    for index, date in enumerate(dates):
+        row: Dict[str, Any] = {"date": date}
+        for period in periods:
+            series = wr.get(str(period)) or wr.get(period) or []
+            row[f"wr_{period}"] = series[index] if index < len(series) else None
+        rows.append(row)
+    latest = {}
+    raw_latest = clean.get("latest") or {}
+    for period in periods:
+        latest[f"wr_{period}"] = raw_latest.get(str(period)) if str(period) in raw_latest else raw_latest.get(period)
+    return {
+        "asof": clean.get("asof"),
+        "periods": periods,
+        "latest": latest,
+        "rows": rows,
+        "crossings": clean.get("crossings") or [],
+    }
+
+
+def _technicals_section(context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if context is None:
+        return None
+    latest = context.get("latest") or {}
+    items = []
+    for period in context.get("periods") or []:
+        value = latest.get(f"wr_{period}")
+        label, status = _williams_status(value)
+        items.append(_display_item(f"wr_{period}", f"Williams %R {period}日", value, f"{period}日 Williams %R，{label}。", status=status))
+    return {
+        "id": "technicals",
+        "title": "Williams %R Technicals",
+        "summary": "技术面只作为价格位置辅助，不参与买卖建议；展示 14/28/60 日 %R、阈值状态和交叉事件。",
+        "items": items,
+        "details": {
+            "asof": context.get("asof"),
+            "periods": context.get("periods"),
+            "latest": latest,
+            "crossings": context.get("crossings") or [],
+        },
+        "rows": context.get("rows") or [],
+        "crossings": context.get("crossings") or [],
+        "warnings": [item for item in items if item.get("status") in {"missing", "warning", "error"}],
+    }
+
+
+def _williams_status(value: Any) -> tuple[str, str]:
+    number = _safe_float(value)
+    if number is None:
+        return "数据缺失", "missing"
+    if number <= -80:
+        return "超卖区", "warning"
+    if number >= -20:
+        return "超买区", "warning"
+    return "中性区", "ok"
 
 
 def _annual_report_rows(rows: Any) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -547,7 +923,9 @@ def _annual_report_rows(rows: Any) -> tuple[List[Dict[str, Any]], List[Dict[str,
     if not sorted_candidates:
         return [], []
 
-    conservative_latest_year = datetime.now(timezone.utc).year - 2
+    # A-share annual reports are published by April 30 each year for the prior fiscal year.
+    # By mid-year, last year's annual data is confirmed. Use year-1 so FY(current-1) is accepted.
+    conservative_latest_year = datetime.now(timezone.utc).year - 1
     annual_rows: List[Dict[str, Any]] = []
     excluded_years: List[str] = []
     for row in sorted_candidates:
@@ -632,6 +1010,14 @@ def _safe_divide(numerator: float, denominator: float) -> Optional[float]:
     if denominator == 0:
         return None
     return numerator / denominator
+
+
+def _safe_percent(numerator: Any, denominator: Any) -> Optional[float]:
+    n = _safe_float(numerator)
+    d = _safe_float(denominator)
+    if n is None or d in (None, 0):
+        return None
+    return n / d * 100
 
 
 def _diagnostics_section(diagnostics: Any) -> Dict[str, Any]:
