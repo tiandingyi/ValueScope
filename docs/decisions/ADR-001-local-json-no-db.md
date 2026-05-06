@@ -18,13 +18,13 @@ The first market is A shares, but the long-term product should support global eq
 
 Use local JSON snapshots as the normal-use persistence layer.
 
-The first contract is `screen_snapshot.json`. Later versions may split data into company metadata, financial snapshots, factor snapshots, refresh manifests, and screen-run history.
+The first contract is `company_report_snapshot.json`. The later screening contract is `screen_snapshot.json`. Later versions may split data into company metadata, financial snapshots, factor snapshots, refresh manifests, and screen-run history.
 
 ## Consequences
 
 Positive:
 
-- The app can run without PostgreSQL, Supabase, Docker, or a backend service.
+- The app can run without PostgreSQL, Supabase, Docker, or a required remote backend service.
 - Snapshots can be copied, archived, inspected, and versioned.
 - The data contract is easy for coding agents and humans to review.
 - Mobile and desktop workflows remain possible without server orchestration.
@@ -47,4 +47,4 @@ Reconsider this decision if:
 
 ## Non-Decision
 
-This does not prohibit optional import/export tools, generated indexes, SQLite for advanced local search, or a future cloud product. It only says the first normal workflow must not require a database.
+This does not prohibit optional import/export tools, generated indexes, a local API bridge for Python generation, SQLite for advanced local search, or a future cloud product. It only says the first normal workflow must not require a database.

@@ -33,3 +33,11 @@ env/
 *.log
 npm-debug.log*
 yarn-debug.log*
+
+# Generated local artifacts
+data/raw/
+data/report_snapshots/
+reports/
+reports_hk_us_pricing_power/
+test-results/
+playwright-report/

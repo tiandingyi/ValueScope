@@ -29,10 +29,11 @@ ValueScope data pipeline / Python
 ValueScope / Vite + React + TypeScript
   -> validate local JSON snapshots with Zod
   -> render the financial report in React first
+  -> call a local FastAPI bridge when the user triggers Python generation from the UI
   -> later run client-side factor screening
 ```
 
-The ValueScope app stack is Vite, React, TypeScript, Zod, Vitest, and Playwright.
+The ValueScope app stack is Vite, React, TypeScript, Zod, Vitest, Playwright, FastAPI, and ValueScope-owned Python.
 
 Sprint 001 should reproduce the single-stock financial report path first. It does not include universe screening. Screening comes after report generation and React report rendering are trustworthy.
 
@@ -40,7 +41,7 @@ Sprint 001 should reproduce the single-stock financial report path first. It doe
 
 Positive:
 
-- The UI stays offline-first and does not require Python at runtime.
+- The UI stays local-first. Rendering a committed or imported snapshot does not require Python, while UI-triggered generation uses the local FastAPI bridge.
 - Python remains the right place for ValueScope-owned financial data generation.
 - JSON contracts become the stable boundary between data generation, report rendering, and later screening.
 - Tests can split cleanly: Python pipeline tests for report generation, TypeScript tests for validation and report rendering, later tests for filtering, sorting, and explanations.

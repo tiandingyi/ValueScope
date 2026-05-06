@@ -1,0 +1,21 @@
+[project]
+name = "valuescope"
+version = "0.1.0"
+description = "Local-first value investing research workstation."
+requires-python = ">=3.9"
+dependencies = [
+  "akshare",
+  "fastapi",
+  "numpy",
+  "pandas",
+  "requests",
+  "uvicorn",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["python"]
+testpaths = ["tests/python"]
+

@@ -46,6 +46,9 @@ Acceptance Criteria:
 - Given the schema doc, an agent can create a valid sample company report snapshot.
 - Given a snapshot, it includes metadata, company identity, coverage years, report sections, metrics, and warnings.
 - Given missing values, they are represented explicitly and safely.
+- Given historical annual data exists, the snapshot preserves every available annual-report year rather than truncating to the most recent five years.
+- Given an annual row exists, it includes report type, source, and provenance fields.
+- Given a provider row cannot prove annual-report provenance, it is excluded from annual history and surfaced through a warning if it affects the latest year.
 
 Notes:
 
@@ -62,6 +65,8 @@ Acceptance Criteria:
 
 - Given the generator runs for a supported sample company, it writes `company_report_snapshot.json`.
 - Given the output, it includes metadata, company identity, report sections, metrics, and warnings.
+- Given the latest fiscal year does not have a confirmed annual report row, the generator ignores quarterly, interim, or unverified `YYYY1231` rows and uses the latest confirmed annual report year instead.
+- Given the provider lacks explicit report-type metadata, the generator applies a conservative cutoff and excludes the previous fiscal year unless annual provenance is explicit.
 - Given missing values, it records `null` plus missing metric names rather than zero.
 - Given source or computation failures, it keeps the snapshot inspectable and reports warnings.
 
@@ -96,6 +101,11 @@ so that the old static HTML report workflow becomes an interactive local worksta
 Acceptance Criteria:
 
 - Given a loaded report snapshot, the app renders core report sections.
+- Given an annual data table is shown, it displays all available annual-report rows from the snapshot, not just the latest five rows.
+- Given a year is absent because no confirmed annual report exists, the UI does not infer or synthesize that year from quarterly data.
+- Given the stock-scripts reference report for the same company, the React report matches its information hierarchy closely enough that the first screen shows company identity, report context, key metrics, warning states, and the start of the analytical sections.
+- Given a desktop and mobile screenshot, report text, metric values, cards, tables, and navigation do not overlap, clip, or wrap one character per line.
+- Given the committed sample snapshot, the rendered report demonstrates realistic section density rather than looking like a schema preview.
 - Given a metric has a unit or direction, the UI displays it explicitly.
 - Given a metric is missing or not applicable, the UI labels that state rather than hiding it.
 - Given a warning exists, the UI shows it near the affected section.
@@ -115,6 +125,8 @@ so that React report sections can reuse one stable yearly data contract.
 Acceptance Criteria:
 
 - Given normalized sample financial inputs, the generator creates yearly rows with revenue, gross margin, expense ratios, cash cycle, OCF, Capex, net income, ROE, ROIC, and per-share fields where available.
+- Given source data includes quarterly periods, interim periods, or unverified `YYYY1231` rows, the generator excludes those rows from annual report history and keeps only confirmed annual-report periods.
+- Given annual rows are generated, each row records `report_type`, `report_source`, and `report_provenance`.
 - Given a value is unavailable, the row stores `null` and a status instead of `0`.
 - Given fewer than the requested years are available, the snapshot records the actual coverage and a warning.
 
